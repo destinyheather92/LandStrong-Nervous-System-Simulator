@@ -424,3 +424,228 @@ button:disabled {
     opacity: 0;
   }
 }
+
+/* ============================================================
+   GRAIN OVERLAY
+   ============================================================ */
+/* uses an inline SVG noise filter to generate film grain directly in CSS without needing an image file. The turbulence filter creates randomized noise patterns that lightly overlay the interface. */
+.grain-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise" seed="2"/></filter><rect width="100" height="100" fill="rgba(255,255,255,0.02)" filter="url(%23noise)"/></svg>');
+  pointer-events: none;
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+}
+
+/* ============================================================
+   HERO SECTION
+   ============================================================ */
+/* creates the full-screen intro environment using a layered dark gradient background. The gradient shifts between deep navy and charcoal tones to create a calming emotional atmosphere while giving the glowing blues and purples space to stand out. */
+.hero-section {
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f1419 0%, #1a1e2e 50%, #0f1419 100%);
+}
+
+.hero-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  max-width: 600px;
+  padding: 40px;
+}
+
+.hero-title-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+  animation: titleFadeIn 1.2s ease-out forwards;
+  opacity: 0;
+}
+
+.hero-logo {
+  max-width: 300px;
+  height: auto;
+  width: clamp(150px, 30vw, 350px);
+  animation: logoFadeIn 1.2s ease-out forwards;
+  opacity: 0;
+  filter: drop-shadow(0 0 30px rgba(80, 141, 200, 0.3));
+}
+
+@keyframes logoFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.hero-title {
+  font-size: clamp(48px, 10vw, 92px);
+  font-weight: var(--font-weight-thin);
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  background: linear-gradient(
+    135deg,
+    var(--color-calm-blue),
+    var(--color-periwinkle),
+    var(--color-calm-blue)
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease-in-out infinite;
+  text-shadow: 0 0 30px rgba(80, 141, 200, 0.3);
+}
+
+@keyframes gradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes titleFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.glow-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  border: 2px solid rgba(80, 141, 200, 0.2);
+  border-radius: 50%;
+  animation: glowPulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+.hero-tagline {
+  font-size: 18px;
+  font-weight: var(--font-weight-light);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--color-calm-blue);
+  margin-bottom: 15px;
+  animation: fadeInUp 1.2s ease-out 0.2s forwards;
+  opacity: 0;
+}
+
+.hero-description {
+  font-size: 16px;
+  font-weight: var(--font-weight-light);
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 40px;
+  line-height: 1.6;
+  animation: fadeInUp 1.2s ease-out 0.4s forwards;
+  opacity: 0;
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-section .btn {
+  animation: fadeInUp 1.2s ease-out 0.6s forwards;
+  opacity: 0;
+}
+
+.floating-text {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.float-element {
+  position: absolute;
+  font-size: 14px;
+  font-weight: var(--font-weight-light);
+  color: rgba(112, 129, 191, 0.3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  animation: floatAround 10s ease-in-out infinite;
+/* The :nth-child() selectors position each word in different locations and stagger animation timing so the motion feels organic rather than repetitive. */
+  &:nth-child(1) {
+    top: 20%;
+    left: 10%;
+    animation-delay: 0s;
+  }
+  &:nth-child(2) {
+    top: 60%;
+    right: 10%;
+    animation-delay: 2s;
+  }
+  &:nth-child(3) {
+    top: 70%;
+    left: 15%;
+    animation-delay: 4s;
+  }
+  &:nth-child(4) {
+    top: 30%;
+    right: 20%;
+    animation-delay: 6s;
+  }
+}
+/* The floatAround animation slowly moves the words while subtly adjusting opacity to create atmospheric motion without distracting the user. */
+@keyframes floatAround {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(30px, 30px);
+    opacity: 0.6;
+  }
+}
+
