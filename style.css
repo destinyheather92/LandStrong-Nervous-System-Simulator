@@ -1,0 +1,55 @@
+/* ============================================================
+   LandStrong: Nervous System Simulator - Main Stylesheet
+   ============================================================ */
+
+/* ============================================================
+   CSS VARIABLES & ROOT CONFIGURATION
+   ============================================================ */
+:root {
+  /* Brand Color Palette */
+  --color-deep-slate: #4a5464;
+  --color-soft-white: #ffffff;
+  --color-royal-indigo: #40539f;
+  --color-calm-blue: #508dc8;
+  --color-periwinkle: #7081bf;
+  --color-dusty-blue: #456d9f;
+  --color-soft-gray: #929495;
+
+  /* Gradient Definitions */
+  --gradient-primary: linear-gradient(135deg, #40539f, #508dc8);
+  --gradient-calm: linear-gradient(135deg, #508dc8, #7081bf);
+  --gradient-dark: linear-gradient(135deg, #4a5464, #40539f);
+  --gradient-warm: linear-gradient(135deg, #456d9f, #40539f);
+
+  /* Effects & Shadows */
+  --glow-primary: 0 0 30px rgba(64, 83, 159, 0.6);
+  --glow-secondary: 0 0 20px rgba(80, 141, 200, 0.4);
+  --glow-soft: 0 0 15px rgba(112, 129, 191, 0.3);
+  --shadow-primary: 0 10px 40px rgba(0, 0, 0, 0.3);
+  --shadow-secondary: 0 5px 20px rgba(0, 0, 0, 0.2);
+  --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
+
+  /* Blur & Transparency */
+  --blur-small: 10px;
+  --blur-medium: 20px;
+  --blur-large: 30px;
+  --border-opacity: 0.2;
+  --glass-opacity: 0.1;
+
+  /* Transitions & Animations */
+  --transition-fast: 0.3s ease-out;
+  --transition-medium: 0.6s ease-out;
+  --transition-slow: 1s ease-out;
+  --transition-very-slow: 1.5s ease-out;
+
+  /* Font Family */
+  --font-primary: "Josefin Sans", sans-serif;
+
+  /* Typography */
+  --font-weight-thin: 100;
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
