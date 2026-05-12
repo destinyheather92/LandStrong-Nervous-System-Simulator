@@ -193,3 +193,180 @@ body {
   }
 }
 
+/* ============================================================
+   APP CONTAINER
+   ============================================================ */
+
+.app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ============================================================
+   REUSABLE COMPONENTS
+   ============================================================ */
+
+/* Section Base Styles */
+/* This turns every section into a full-screen container and toggles between active and hidden classes to display */
+section {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--transition-medium),
+    pointer-events var(--transition-medium);
+}
+
+section.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+section.hidden {
+  display: none;
+}
+
+/* Buttons - Primary Style */
+.btn {
+  padding: 12px 32px;
+  border: none;
+  border-radius: 50px;
+  font-family: var(--font-primary);
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.btn:hover {
+  transform: translateY(-3px);
+  cursor: pointer;
+}
+
+.btn:active {
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--color-soft-white);
+  box-shadow: var(--glow-primary);
+  border: 1px solid rgba(112, 129, 191, 0.3);
+}
+
+.btn-primary:hover {
+  box-shadow:
+    var(--glow-primary),
+    0 0 50px rgba(64, 83, 159, 0.8);
+}
+
+.btn-primary:active {
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: rgba(74, 84, 100, 0.4);
+  color: var(--color-soft-white);
+  border: 1px solid rgba(112, 129, 191, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.btn-secondary:hover {
+  background: rgba(74, 84, 100, 0.6);
+  box-shadow: var(--glow-soft);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-calm-blue);
+  border: 2px solid rgba(80, 141, 200, 0.5);
+}
+
+.btn-outline:hover {
+  background: rgba(80, 141, 200, 0.1);
+  box-shadow: var(--glow-secondary);
+}
+
+.btn-small {
+  padding: 10px 24px;
+  font-size: 12px;
+}
+
+/* Buttons Active State */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   ANIMATED BLOBS & BACKGROUND EFFECTS
+   ============================================================ */
+/* mixed blend mode makes colors blend together softly for a dreamy glow effect. The individual blob classes define diffent sizes, colors, starting positions, and animation timings so the background feels organic insterad of repetitive.  */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(60px);
+  opacity: 0.4;
+  animation: float 20s ease-in-out infinite;
+}
+
+.blob-1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(64, 83, 159, 0.8), transparent);
+  top: -100px;
+  right: -100px;
+  animation-duration: 25s;
+  animation-delay: 0s;
+}
+
+.blob-2 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(80, 141, 200, 0.6), transparent);
+  bottom: -50px;
+  left: -50px;
+  animation-duration: 30s;
+  animation-delay: 2s;
+}
+
+.blob-3 {
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(112, 129, 191, 0.5), transparent);
+  top: 50%;
+  left: 50%;
+  animation-duration: 28s;
+  animation-delay: 4s;
+}
+/* controls how the blobs slowly drift and scale around the screen over time, the movement is intentionally subtle and smooth to reinforce calming the servous system regulation aesthetic.  */
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  50% {
+    transform: translate(-30px, 30px) scale(0.9);
+  }
+  75% {
+    transform: translate(20px, 50px) scale(1.05);
+  }
+}
