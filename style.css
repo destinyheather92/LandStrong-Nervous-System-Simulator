@@ -370,3 +370,57 @@ button:disabled {
     transform: translate(20px, 50px) scale(1.05);
   }
 }
+
+/* ============================================================
+   PARTICLES SYSTEM
+   ============================================================ */
+    /* This css creates a flaoting particle system in the background that adds subtle movement. THis is designed to make the website feel more immersive calming and alive without distracting the user.  */
+    /* .particles-container acts as a full-screen layer that sits behind or around the content. Since it stretches across the entire viewport and uses:  */
+    /* pointer-events: none -- users can still click buttons and interact with the UI normally without particles blocking everything.  */
+.particles-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* defines the particles themselves- its a tiny glowing circle created using radial gradients, transparency, glow shadows, rounded edges.  */
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  /* creates a soft fading glow effect instead of a solid dot, helping the particles feel more atmospheric and less harsh.VVV */
+  background: radial-gradient(circle, rgba(112, 129, 191, 0.8), transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(112, 129, 191, 0.5);
+}
+/* the slow, medium and fast allows js to create particles moving at different speeds making motion feel organic and natural.  */
+.particle.slow {
+  animation-duration: 30s;
+}
+
+.particle.medium {
+  animation-duration: 20s;
+}
+
+.particle.fast {
+  animation-duration: 10s;
+}
+
+@keyframes drift {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(100px);
+    opacity: 0;
+  }
+}
