@@ -648,4 +648,163 @@ button:disabled {
     opacity: 0.6;
   }
 }
+/* ============================================================
+   STATE SELECTION SECTION
+   ============================================================ */
+        /* reating the emotional state selection screen where users choose how they’re currently feeling before entering the regulation experience. */
+.state-section {
+  background: linear-gradient(135deg, #0f1419 0%, #1a1e2e 50%, #0f1419 100%);
+    /* background: linear-gradient(135deg, #ececec 0%, #fafafc 50%, #0f1419 100%); */
+  overflow-y: auto;
+}
 
+.state-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.state-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 60px 40px;
+}
+
+.state-header {
+  text-align: center;
+  margin-bottom: 60px;
+  animation: fadeInDown 1s ease-out;
+}
+
+.state-header h2 {
+  font-size: clamp(28px, 6vw, 48px);
+  font-weight: var(--font-weight-light);
+  margin-bottom: 15px;
+  background: linear-gradient(
+    135deg,
+    var(--color-calm-blue),
+    var(--color-periwinkle)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.state-header p {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: var(--font-weight-light);
+  letter-spacing: 1px;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Emotion Grid */
+.emotion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(250px, 1fr));
+  gap: 30px;
+  animation: fadeIn 1s ease-out 0.2s forwards;
+  opacity: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.emotion-card {
+  padding: 40px;
+  background: rgba(74, 84, 100, 0.2);
+  border: 1px solid rgba(112, 129, 191, 0.3);
+  border-radius: 20px;
+  cursor: none;
+  transition: all var(--transition-medium);
+  backdrop-filter: blur(var(--blur-small));
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.emotion-card::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(112, 129, 191, 0.2), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-medium);
+}
+
+.emotion-card:hover {
+  background: rgba(74, 84, 100, 0.4);
+  border-color: rgba(112, 129, 191, 0.6);
+  transform: translateY(-10px);
+  box-shadow:
+    var(--glow-soft),
+    0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.emotion-card:hover::before {
+  opacity: 1;
+}
+
+.emotion-card.active {
+  background: var(--gradient-primary);
+  border-color: rgba(112, 129, 191, 0.8);
+  box-shadow:
+    var(--glow-primary),
+    0 20px 60px rgba(64, 83, 159, 0.5);
+  transform: scale(1.05);
+}
+
+.emotion-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+  transition: transform var(--transition-medium);
+}
+
+.emotion-card:hover .emotion-icon {
+  transform: scale(1.2) rotate(5deg);
+}
+
+.emotion-name {
+  font-size: 20px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.emotion-description {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: var(--font-weight-light);
+  line-height: 1.5;
+}
