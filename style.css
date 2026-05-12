@@ -53,3 +53,142 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 }
+
+/* ============================================================
+   CSS VARIABLES & ROOT CONFIGURATION
+   ============================================================ */
+
+:root {
+  /* Brand Color Palette */
+  --color-deep-slate: #4a5464;
+  --color-soft-white: #ffffff;
+  --color-royal-indigo: #40539f;
+  --color-calm-blue: #508dc8;
+  --color-periwinkle: #7081bf;
+  --color-dusty-blue: #456d9f;
+  --color-soft-gray: #929495;
+
+  /* Gradient Definitions */
+  --gradient-primary: linear-gradient(135deg, #40539f, #508dc8);
+  --gradient-calm: linear-gradient(135deg, #508dc8, #7081bf);
+  --gradient-dark: linear-gradient(135deg, #4a5464, #40539f);
+  --gradient-warm: linear-gradient(135deg, #456d9f, #40539f);
+
+  /* Effects & Shadows */
+  --glow-primary: 0 0 30px rgba(64, 83, 159, 0.6);
+  --glow-secondary: 0 0 20px rgba(80, 141, 200, 0.4);
+  --glow-soft: 0 0 15px rgba(112, 129, 191, 0.3);
+  --shadow-primary: 0 10px 40px rgba(0, 0, 0, 0.3);
+  --shadow-secondary: 0 5px 20px rgba(0, 0, 0, 0.2);
+  --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
+
+  /* Blur & Transparency */
+  --blur-small: 10px;
+  --blur-medium: 20px;
+  --blur-large: 30px;
+  --border-opacity: 0.2;
+  --glass-opacity: 0.1;
+
+  /* Transitions & Animations */
+  --transition-fast: 0.3s ease-out;
+  --transition-medium: 0.6s ease-out;
+  --transition-slow: 1s ease-out;
+  --transition-very-slow: 1.5s ease-out;
+
+  /* Font Family */
+  --font-primary: "Josefin Sans", sans-serif;
+
+  /* Typography */
+  --font-weight-thin: 100;
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+
+/* ============================================================
+   GLOBAL STYLES & RESET
+   ============================================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--font-primary);
+  background-color: #1a1e2e;
+  color: var(--color-soft-white);
+  background-image:
+    linear-gradient(to right, rgba(64, 83, 159, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(64, 83, 159, 0.1) 1px, transparent 1px);
+  background-size: 100px 100px;
+}
+
+/* Reduced Motion Support */
+/* That media query checks whether the user has “Reduce Motion” enabled in their operating system accessibility settings. If it is enabled, the query applies styles that significantly reduce or eliminate animations and transitions on the page. This is done by setting animation durations to a very short time (0.01ms) and limiting animation iterations to just one, effectively making animations instantaneous. Transition durations are also set to 0.01ms, ensuring that any CSS transitions occur immediately without any visual delay. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* ============================================================
+   CUSTOM CURSOR
+   ============================================================ */
+
+.custom-cursor {
+  position: fixed;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(
+    circle,
+    rgba(80, 141, 200, 0.8),
+    rgba(64, 83, 159, 0.4)
+  );
+  border: 2px solid rgba(112, 129, 191, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10000;
+  display: none;
+  box-shadow: var(--glow-secondary);
+}
+
+.cursor-follower {
+  position: fixed;
+  width: 50px;
+  height: 50px;
+  border: 1px solid rgba(112, 129, 191, 0.3);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+  opacity: 0.4;
+}
+
+/* Show custom cursor on desktop */
+@media (pointer: fine) {
+  .custom-cursor,
+  .cursor-follower {
+    display: block;
+  }
+
+  body,
+  a {
+    cursor: none !important;
+  }
+
+  button {
+    cursor: pointer !important;
+  }
+}
