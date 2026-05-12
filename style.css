@@ -808,3 +808,621 @@ button:disabled {
   font-weight: var(--font-weight-light);
   line-height: 1.5;
 }
+
+/* ============================================================
+   REGULATION SECTION
+   ============================================================ */
+    /* styling the main regulation experience of the app — the actual nervous system support environment users interact with after selecting an emotional state. It focuses heavily on responsive layouts, emotional visual feedback, immersive breathing animations, grounding modules, journaling UI, and state-based visual behavior. */
+.regulation-section {
+  background: linear-gradient(135deg, #0f1419 0%, #1a1e2e 50%, #0f1419 100%);
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.regulation-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.regulation-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 1000px;
+  padding: 60px 40px;
+}
+
+.regulation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 50px;
+  animation: slideInRight 0.8s ease-out;
+}
+
+.state-title {
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: var(--font-weight-light);
+  background: linear-gradient(
+    135deg,
+    var(--color-calm-blue),
+    var(--color-periwinkle)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Regulation Container */
+.regulation-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+  margin-bottom: 60px;
+}
+
+/* Module Base Styles */
+.module {
+  padding: 40px;
+  background: rgba(74, 84, 100, 0.15);
+  border: 1px solid rgba(112, 129, 191, 0.3);
+  border-radius: 20px;
+  backdrop-filter: blur(var(--blur-small));
+  animation: slideUp 0.8s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.module h3 {
+  font-size: 20px;
+  font-weight: var(--font-weight-medium);
+  margin-bottom: 25px;
+  color: var(--color-calm-blue);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Breathing Module */
+.breathing-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  position: relative;
+}
+/* creates a glowing animated orb using radial gradients, layered shadows, and soft lighting effects. The orb visually expands and contracts to guide breathing rhythms. */
+.breathing-orb {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 30%,
+    var(--breathing-light, rgba(80, 141, 200, 0.8)),
+    var(--breathing-dark, rgba(64, 83, 159, 0.5))
+  );
+  box-shadow:
+    inset -30px -30px 60px rgba(0, 0, 0, 0.3),
+    0 0 60px rgba(80, 141, 200, 0.4),
+    0 0 100px rgba(112, 129, 191, 0.2);
+  margin-bottom: 30px;
+}
+
+.state-title {
+  background: linear-gradient(
+    135deg,
+    var(--color-calm-blue),
+    var(--color-periwinkle)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.module h3 {
+  color: var(--color-calm-blue);
+}
+
+.grounding-item {
+  padding: 15px;
+  background: rgba(64, 83, 159, 0.1);
+  border-left: 3px solid var(--color-calm-blue);
+  border-radius: 8px;
+  transition: all var(--transition-fast);
+}
+
+.grounding-item-title {
+  color: var(--color-calm-blue);
+}
+
+.reflection-card {
+  padding: 20px;
+  background: rgba(64, 83, 159, 0.15);
+  border-left: 3px solid var(--color-calm-blue);
+  border-radius: 10px;
+  transition: all var(--transition-fast);
+}
+
+.reflection-date {
+  color: var(--color-calm-blue);
+}
+/* scale the orb while intensifying glow effects to simulate inhale/exhale breathing cycles. Different animation durations create different pacing styles depending on the selected emotional state. */
+.breathing-count {
+  color: var(--color-calm-blue);
+}
+
+.breathing-orb.breathing {
+  animation: breathe 6s ease-in-out infinite;
+}
+
+.breathing-orb.breathing.fast-breath {
+  animation: breatheFast 4s ease-in-out infinite;
+}
+
+.breathing-orb.breathing.slow-breath {
+  animation: breatheSlow 8s ease-in-out infinite;
+}
+
+.breathing-orb.breathing.combat {
+  animation: breatheCombat 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      inset -30px -30px 60px rgba(0, 0, 0, 0.3),
+      0 0 60px rgba(80, 141, 200, 0.4),
+      0 0 100px rgba(112, 129, 191, 0.2);
+  }
+  50% {
+    transform: scale(1.3);
+    box-shadow:
+      inset -30px -30px 60px rgba(0, 0, 0, 0.2),
+      0 0 80px rgba(80, 141, 200, 0.6),
+      0 0 150px rgba(112, 129, 191, 0.4);
+  }
+}
+
+@keyframes breatheFast {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+@keyframes breatheSlow {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+@keyframes breatheCombat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.breathing-guidance {
+  text-align: center;
+}
+
+.breathing-text {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: var(--font-weight-light);
+  margin-bottom: 10px;
+  min-height: 24px;
+}
+
+.breathing-count {
+  font-size: 24px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-calm-blue);
+}
+
+/* Grounding Module */
+    /* uses stacked flexbox layouts for grounding technique cards. */
+.grounding-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.grounding-item {
+  padding: 15px;
+  background: rgba(64, 83, 159, 0.1);
+  border-left: 3px solid var(--color-calm-blue);
+  border-radius: 8px;
+  transition: all var(--transition-fast);
+}
+
+.grounding-item:hover {
+  background: rgba(64, 83, 159, 0.2);
+  transform: translateX(5px);
+}
+
+.grounding-item-title {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-calm-blue);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.grounding-item-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  font-weight: var(--font-weight-light);
+}
+
+/* Prompts Module */
+.prompt-text {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.8;
+  font-weight: var(--font-weight-light);
+  margin-bottom: 25px;
+  min-height: 60px;
+  font-style: italic;
+}
+
+/* Journal Section */
+.journal-section {
+  padding: 40px;
+  background: rgba(74, 84, 100, 0.15);
+  border: 1px solid rgba(112, 129, 191, 0.3);
+  border-radius: 20px;
+  backdrop-filter: blur(var(--blur-small));
+  margin-bottom: 40px;
+  animation: slideUp 0.8s ease-out 0.1s forwards;
+  opacity: 0;
+}
+
+.journal-section h3 {
+  font-size: 20px;
+  font-weight: var(--font-weight-medium);
+  margin-bottom: 25px;
+  color: var(--color-calm-blue);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.journal-input-wrapper {
+  position: relative;
+  margin-bottom: 15px;
+}
+
+.journal-textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 20px;
+  background: rgba(64, 83, 159, 0.1);
+  border: 1px solid rgba(112, 129, 191, 0.3);
+  border-radius: 12px;
+  color: var(--color-soft-white);
+  font-family: var(--font-primary);
+  font-size: 14px;
+  font-weight: var(--font-weight-light);
+  resize: vertical;
+  transition: all var(--transition-fast);
+}
+
+.journal-textarea:focus {
+  outline: none;
+  background: rgba(64, 83, 159, 0.2);
+  border-color: rgba(112, 129, 191, 0.6);
+  box-shadow: 0 0 20px rgba(80, 141, 200, 0.2);
+}
+
+.journal-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.char-count {
+  position: absolute;
+  bottom: 10px;
+  right: 15px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.previous-reflections {
+  margin-top: 40px;
+  padding-top: 40px;
+  border-top: 1px solid rgba(112, 129, 191, 0.2);
+}
+
+.previous-reflections h4 {
+  font-size: 16px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-calm-blue);
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.reflections-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.reflection-card {
+  padding: 20px;
+  background: rgba(64, 83, 159, 0.15);
+  border-left: 3px solid var(--color-calm-blue);
+  border-radius: 10px;
+  transition: all var(--transition-fast);
+}
+
+.reflection-card:hover {
+  background: rgba(64, 83, 159, 0.25);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.reflection-date {
+  font-size: 12px;
+  color: var(--color-calm-blue);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  font-weight: var(--font-weight-medium);
+}
+
+.reflection-content {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  font-weight: var(--font-weight-light);
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  animation: slideUp 0.8s ease-out 0.2s forwards;
+  opacity: 0;
+}
+
+/* ============================================================
+   STATE-SPECIFIC VISUAL EFFECTS
+   ============================================================ */
+
+/* Fight State */
+.regulation-section.state-fight {
+  --breathing-light: rgba(69, 109, 159, 0.9);
+  --breathing-dark: rgba(64, 83, 159, 0.55);
+}
+
+.regulation-section.state-fight .blob-1 {
+  background: radial-gradient(circle, rgba(69, 109, 159, 0.9), transparent);
+  animation-duration: 15s;
+}
+
+.regulation-section.state-fight .particle {
+  animation-duration: 8s;
+}
+
+/* Flight State */
+.regulation-section.state-flight {
+  --breathing-light: rgba(80, 141, 200, 0.9);
+  --breathing-dark: rgba(64, 83, 159, 0.55);
+}
+
+.regulation-section.state-flight .blob {
+  animation-duration: 18s;
+}
+
+/* Freeze State */
+.regulation-section.state-freeze {
+  --breathing-light: rgba(112, 129, 191, 0.9);
+  --breathing-dark: rgba(80, 141, 200, 0.45);
+}
+
+.regulation-section.state-freeze .blob {
+  animation-duration: 35s;
+}
+
+/* Shutdown State */
+.regulation-section.state-shutdown {
+  --breathing-light: rgba(74, 84, 100, 0.9);
+  --breathing-dark: rgba(64, 83, 159, 0.4);
+}
+
+.regulation-section.state-shutdown .blob {
+  opacity: 0.2;
+  animation-duration: 40s;
+}
+
+/* Overstimulated State */
+.regulation-section.state-overstimulated {
+  --breathing-light: rgba(80, 141, 200, 1);
+  --breathing-dark: rgba(64, 83, 159, 0.55);
+}
+
+.regulation-section.state-overstimulated .blob-1 {
+  animation-duration: 12s;
+}
+
+.regulation-section.state-overstimulated .blob-2 {
+  animation-duration: 14s;
+}
+
+.regulation-section.state-overstimulated .particle {
+  animation-duration: 6s;
+}
+
+.regulation-section.state-overstimulated .particle.fast {
+  animation-duration: 4s;
+}
+
+/* Calm State */
+.regulation-section.state-calm {
+  --breathing-light: rgba(112, 129, 191, 0.9);
+  --breathing-dark: rgba(80, 141, 200, 0.45);
+}
+
+.regulation-section.state-calm .blob {
+  animation-duration: 30s;
+}
+
+/* ============================================================
+   RESPONSIVE DESIGN
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 48px;
+  }
+
+  .emotion-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .regulation-container {
+    grid-template-columns: 1fr;
+  }
+
+  .regulation-header {
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .reflections-list {
+    grid-template-columns: 1fr;
+  }
+
+  .float-element {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-content {
+    padding: 20px;
+  }
+
+  .state-content {
+    padding: 30px 20px;
+  }
+
+  .regulation-content {
+    padding: 30px 20px;
+  }
+
+  .module {
+    padding: 25px;
+  }
+
+  .journal-section {
+    padding: 25px;
+  }
+
+  .breathing-orb {
+    width: 120px;
+    height: 120px;
+  }
+}
+
+/* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
+
+@media (prefers-contrast: more) {
+  .btn-primary {
+    border-color: var(--color-soft-white);
+  }
+
+  .btn-secondary {
+    border-color: var(--color-soft-white);
+  }
+
+  .emotion-card {
+    border-color: var(--color-soft-white);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  body {
+    background-color: #f5f5f5;
+    color: #1a1e2e;
+  }
+
+  .hero-title {
+    color: var(--color-royal-indigo);
+  }
+
+  .emotion-card {
+    background: rgba(112, 129, 191, 0.1);
+    color: white;
+  }
+}
+
+/* ============================================================
+   PRINT STYLES
+   ============================================================ */
+
+@media print {
+  section {
+    page-break-inside: avoid;
+  }
+
+  .particles-container,
+  .blob,
+  .custom-cursor,
+  .cursor-follower {
+    display: none !important;
+  }
+}
