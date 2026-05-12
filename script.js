@@ -13,10 +13,98 @@ const appState = {
   reflections: [],
 };
 
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const storageKeys = {
+  preferences: "landstrongPreferences",
+  activity: "landstrongActivity",
+  lastAffirmation: "landstrongLastAffirmation",
+  reflections: "landstrongReflections",
+};
+
+const defaultPreferences = {
+  theme: "dark",
+  animationIntensity: 70,
+  particleDensity: 70,
+  blurStrength: 10,
+  glowIntensity: 70,
+  fontScale: 100,
+  reducedStimulation: false,
+  soundEnabled: false,
+  natureEnabled: false,
+  meditationEnabled: true,
+  guidedMeditationEnabled: false,
+  natureType: "rain",
+  masterVolume: 35,
+  natureVolume: 35,
+  meditationVolume: 25,
+};
+
+const defaultActivity = {
+  emotionHistory: [],
+  breathingSessions: [],
+  appVisits: [],
+};
+
+function readStorage(key, fallback) {
+  try {
+    const storedValue = localStorage.getItem(key);
+    return storedValue ? JSON.parse(storedValue) : fallback;
+  } catch (error) {
+    console.log("Storage read failed:", error);
+    return fallback;
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.log("Storage write failed:", error);
+  }
+}
+
+function loadPreferences() {
+  return {
+    ...defaultPreferences,
+    ...readStorage(storageKeys.preferences, {}),
+  };
+}
+
+function loadActivity() {
+  const storedActivity = readStorage(storageKeys.activity, {});
+
+  return {
+    emotionHistory: Array.isArray(storedActivity.emotionHistory)
+      ? storedActivity.emotionHistory
+      : [],
+    breathingSessions: Array.isArray(storedActivity.breathingSessions)
+      ? storedActivity.breathingSessions
+      : [],
+    appVisits: Array.isArray(storedActivity.appVisits)
+      ? storedActivity.appVisits
+      : [],
+  };
+}
+
+let userPreferences = loadPreferences();
+let activityData = loadActivity();
+
+const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+const audioContext = AudioContextConstructor
+  ? new AudioContextConstructor()
+  : null;
 let meditationOscillator = null;
 let meditationGain = null;
 let meditationLfo = null;
+let ambientMasterGain = null;
+let natureGain = null;
+let natureSource = null;
+let natureFilter = null;
+let natureLfo = null;
+let natureLfoGain = null;
+let forestIntervalId = null;
+let guidedMeditationTimeoutId = null;
+let guidedMeditationLineIndex = 0;
+let isGuidedMeditationPlaying = false;
 const meditationFrequencies = {
   fight: 220,
   flight: 185,
@@ -25,6 +113,183 @@ const meditationFrequencies = {
   overstimulated: 175,
   calm: 185,
 };
+
+function savePreferences() {
+  writeStorage(storageKeys.preferences, userPreferences);
+}
+
+function saveActivity() {
+  activityData.emotionHistory = activityData.emotionHistory.slice(0, 80);
+  activityData.breathingSessions = activityData.breathingSessions.slice(0, 80);
+  activityData.appVisits = activityData.appVisits.slice(0, 120);
+  writeStorage(storageKeys.activity, activityData);
+}
+
+function ensureAudioGraph() {
+  if (!audioContext) return false;
+
+  if (!ambientMasterGain) {
+    ambientMasterGain = audioContext.createGain();
+    ambientMasterGain.gain.value = userPreferences.masterVolume / 100;
+    ambientMasterGain.connect(audioContext.destination);
+  }
+
+  if (!natureGain) {
+    natureGain = audioContext.createGain();
+    natureGain.gain.value = 0;
+    natureGain.connect(ambientMasterGain);
+  }
+
+  return true;
+}
+
+function resumeAudioContext() {
+  if (!ensureAudioGraph()) return Promise.resolve(false);
+
+  if (audioContext.state === "suspended") {
+    return audioContext.resume().then(() => true);
+  }
+
+  return Promise.resolve(true);
+}
+
+function setGainValue(gainNode, value, rampSeconds = 0.25) {
+  if (!gainNode || !audioContext) return;
+
+  const now = audioContext.currentTime;
+  gainNode.gain.cancelScheduledValues(now);
+  gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+  gainNode.gain.linearRampToValueAtTime(value, now + rampSeconds);
+}
+
+function createNoiseBuffer() {
+  const bufferLength = audioContext.sampleRate * 2;
+  const buffer = audioContext.createBuffer(
+    1,
+    bufferLength,
+    audioContext.sampleRate,
+  );
+  const data = buffer.getChannelData(0);
+
+  for (let i = 0; i < bufferLength; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  return buffer;
+}
+
+function stopNatureSound() {
+  if (natureSource) {
+    natureSource.stop();
+    natureSource.disconnect();
+    natureSource = null;
+  }
+
+  if (natureFilter) {
+    natureFilter.disconnect();
+    natureFilter = null;
+  }
+
+  if (natureLfo) {
+    natureLfo.stop();
+    natureLfo.disconnect();
+    natureLfo = null;
+  }
+
+  if (natureLfoGain) {
+    natureLfoGain.disconnect();
+    natureLfoGain = null;
+  }
+
+  if (forestIntervalId) {
+    clearInterval(forestIntervalId);
+    forestIntervalId = null;
+  }
+}
+
+function configureNatureTexture() {
+  natureFilter = audioContext.createBiquadFilter();
+
+  if (userPreferences.natureType === "ocean") {
+    natureFilter.type = "lowpass";
+    natureFilter.frequency.value = 520;
+    natureFilter.Q.value = 0.9;
+
+    natureLfo = audioContext.createOscillator();
+    natureLfoGain = audioContext.createGain();
+    natureLfo.frequency.value = 0.08;
+    natureLfoGain.gain.value = 260;
+    natureLfo.connect(natureLfoGain);
+    natureLfoGain.connect(natureFilter.frequency);
+    natureLfo.start();
+  } else if (userPreferences.natureType === "forest") {
+    natureFilter.type = "bandpass";
+    natureFilter.frequency.value = 1450;
+    natureFilter.Q.value = 0.7;
+    forestIntervalId = setInterval(playForestChime, 4200);
+  } else {
+    natureFilter.type = "highpass";
+    natureFilter.frequency.value = 900;
+    natureFilter.Q.value = 0.5;
+  }
+}
+
+function playForestChime() {
+  if (
+    !userPreferences.soundEnabled ||
+    !userPreferences.natureEnabled ||
+    userPreferences.natureType !== "forest"
+  ) {
+    return;
+  }
+
+  const chime = audioContext.createOscillator();
+  const chimeGain = audioContext.createGain();
+  const frequency = 820 + Math.random() * 540;
+
+  chime.type = "sine";
+  chime.frequency.value = frequency;
+  chimeGain.gain.value = 0;
+  chime.connect(chimeGain);
+  chimeGain.connect(natureGain);
+
+  chime.start();
+  chimeGain.gain.linearRampToValueAtTime(
+    0.012,
+    audioContext.currentTime + 0.08,
+  );
+  chimeGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.7);
+  chime.stop(audioContext.currentTime + 0.8);
+}
+
+function startNatureSound() {
+  if (!ensureAudioGraph()) return;
+
+  stopNatureSound();
+  configureNatureTexture();
+
+  natureSource = audioContext.createBufferSource();
+  natureSource.buffer = createNoiseBuffer();
+  natureSource.loop = true;
+  natureSource.connect(natureFilter);
+  natureFilter.connect(natureGain);
+  natureSource.start();
+}
+
+function updateNatureSound() {
+  if (!userPreferences.soundEnabled || !userPreferences.natureEnabled) {
+    setGainValue(natureGain, 0);
+    stopNatureSound();
+    return;
+  }
+
+  if (!natureSource) {
+    startNatureSound();
+  }
+
+  const natureLevel = 0.16 * (userPreferences.natureVolume / 100);
+  setGainValue(natureGain, natureLevel);
+}
 
 function stopMeditationSound() {
   if (meditationOscillator) {
@@ -44,19 +309,20 @@ function stopMeditationSound() {
 }
 
 function playMeditationSound(stateKey) {
-  if (!audioContext) return;
+  if (!userPreferences.soundEnabled || !userPreferences.meditationEnabled) {
+    stopMeditationSound();
+    updateSoundStatus();
+    return;
+  }
 
-  // Stop any existing sound first
   stopMeditationSound();
 
-  // Resume audio context if needed (required by modern browsers)
-  if (audioContext.state === "suspended") {
-    audioContext.resume().then(() => {
+  resumeAudioContext().then((isReady) => {
+    if (isReady) {
       createMeditationSound(stateKey);
-    });
-  } else {
-    createMeditationSound(stateKey);
-  }
+      updateSoundStatus();
+    }
+  });
 }
 
 function createMeditationSound(stateKey) {
@@ -69,10 +335,10 @@ function createMeditationSound(stateKey) {
     meditationOscillator.type = "sine";
     meditationOscillator.frequency.value =
       meditationFrequencies[stateKey] || 180;
-    meditationGain.gain.value = 0.0012;
+    meditationGain.gain.value = 0;
 
     meditationOscillator.connect(meditationGain);
-    meditationGain.connect(audioContext.destination);
+    meditationGain.connect(ambientMasterGain);
 
     meditationLfo.type = "sine";
     meditationLfo.frequency.value = 0.18;
@@ -83,14 +349,205 @@ function createMeditationSound(stateKey) {
     meditationOscillator.start();
     meditationLfo.start();
 
-    meditationGain.gain.setValueAtTime(0, audioContext.currentTime);
+    const meditationLevel = 0.035 * (userPreferences.meditationVolume / 100);
     meditationGain.gain.linearRampToValueAtTime(
-      0.0012,
+      meditationLevel,
       audioContext.currentTime + 2,
     );
   } catch (error) {
     console.log("Audio not available:", error);
   }
+}
+
+function updateMeditationVolume() {
+  if (!meditationGain) return;
+
+  const meditationLevel =
+    userPreferences.soundEnabled && userPreferences.meditationEnabled
+      ? 0.035 * (userPreferences.meditationVolume / 100)
+      : 0;
+
+  setGainValue(meditationGain, meditationLevel);
+}
+
+function supportsGuidedMeditation() {
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function getGuidedMeditationStateKey() {
+  return appState.selectedEmotion || getRoutineStateKey();
+}
+
+function getGuidedMeditationLines(stateKey) {
+  return guidedMeditationsByState[stateKey] || guidedMeditationsByState.calm;
+}
+
+function updateGuidedMeditationControls() {
+  if (guidedMeditationToggle) {
+    guidedMeditationToggle.checked = userPreferences.guidedMeditationEnabled;
+  }
+
+  if (guidedMeditationButton) {
+    guidedMeditationButton.textContent = isGuidedMeditationPlaying
+      ? "Stop Guidance"
+      : "Play Guidance";
+  }
+}
+
+function stopGuidedMeditation(message = "Guided voice is paused.") {
+  if (guidedMeditationTimeoutId) {
+    clearTimeout(guidedMeditationTimeoutId);
+    guidedMeditationTimeoutId = null;
+  }
+
+  if (supportsGuidedMeditation()) {
+    window.speechSynthesis.cancel();
+  }
+
+  isGuidedMeditationPlaying = false;
+  updateGuidedMeditationControls();
+
+  if (guidedMeditationText) {
+    guidedMeditationText.textContent = message;
+  }
+}
+
+function speakGuidedMeditationLine(stateKey) {
+  if (!isGuidedMeditationPlaying) return;
+
+  const lines = getGuidedMeditationLines(stateKey);
+
+  if (guidedMeditationLineIndex >= lines.length) {
+    stopGuidedMeditation("Guidance complete. Stay with the breath you found.");
+    return;
+  }
+
+  const line = lines[guidedMeditationLineIndex];
+  const utterance = new SpeechSynthesisUtterance(line);
+  const voiceVolume =
+    (userPreferences.masterVolume / 100) *
+    (userPreferences.meditationVolume / 100);
+
+  utterance.volume = Math.max(0, Math.min(voiceVolume, 1));
+  utterance.rate = ["freeze", "shutdown", "calm"].includes(stateKey)
+    ? 0.82
+    : 0.9;
+  utterance.pitch = stateKey === "fight" ? 0.92 : 0.98;
+
+  if (guidedMeditationText) {
+    guidedMeditationText.textContent = line;
+  }
+
+  utterance.onend = () => {
+    guidedMeditationLineIndex++;
+    guidedMeditationTimeoutId = setTimeout(() => {
+      speakGuidedMeditationLine(stateKey);
+    }, 1800);
+  };
+
+  utterance.onerror = () => {
+    stopGuidedMeditation("Guided voice stopped. You can continue silently.");
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function startGuidedMeditation(stateKey = getGuidedMeditationStateKey()) {
+  if (!supportsGuidedMeditation()) {
+    if (guidedMeditationText) {
+      guidedMeditationText.textContent =
+        "Guided voice is not available in this browser.";
+    }
+    return;
+  }
+
+  if (
+    !userPreferences.soundEnabled ||
+    !userPreferences.guidedMeditationEnabled
+  ) {
+    userPreferences.soundEnabled = true;
+    userPreferences.guidedMeditationEnabled = true;
+    savePreferences();
+    applyPreferences({ refreshParticles: false, updateAudio: true });
+  }
+
+  window.speechSynthesis.cancel();
+  guidedMeditationLineIndex = 0;
+  isGuidedMeditationPlaying = true;
+  updateGuidedMeditationControls();
+  speakGuidedMeditationLine(stateKey);
+}
+
+function toggleGuidedMeditation() {
+  if (isGuidedMeditationPlaying) {
+    stopGuidedMeditation();
+  } else {
+    startGuidedMeditation();
+  }
+}
+
+function updateSoundscape() {
+  if (!ensureAudioGraph()) {
+    if (soundStatus) {
+      soundStatus.textContent =
+        userPreferences.guidedMeditationEnabled && supportsGuidedMeditation()
+          ? "Guided voice can play; ambient audio is unavailable."
+          : "Audio is unavailable in this browser.";
+    }
+    return;
+  }
+
+  setGainValue(ambientMasterGain, userPreferences.masterVolume / 100);
+
+  if (!userPreferences.soundEnabled) {
+    setGainValue(ambientMasterGain, 0);
+    stopNatureSound();
+    stopMeditationSound();
+    stopGuidedMeditation("Sound is off. Guided voice is paused.");
+    updateSoundStatus();
+    return;
+  }
+
+  resumeAudioContext().then(() => {
+    setGainValue(ambientMasterGain, userPreferences.masterVolume / 100);
+    updateNatureSound();
+
+    if (!userPreferences.guidedMeditationEnabled && isGuidedMeditationPlaying) {
+      stopGuidedMeditation();
+    }
+
+    if (!userPreferences.meditationEnabled) {
+      stopMeditationSound();
+    } else if (appState.selectedEmotion && !meditationOscillator) {
+      playMeditationSound(appState.selectedEmotion);
+    } else {
+      updateMeditationVolume();
+    }
+
+    updateSoundStatus();
+  });
+}
+
+function updateSoundStatus() {
+  if (!soundStatus) return;
+
+  if (!userPreferences.soundEnabled) {
+    soundStatus.textContent = "Sound is off. Your visual routine stays active.";
+    return;
+  }
+
+  const activeLayers = [];
+  if (userPreferences.natureEnabled) {
+    activeLayers.push(userPreferences.natureType);
+  }
+  if (userPreferences.meditationEnabled) activeLayers.push("meditation");
+  if (userPreferences.guidedMeditationEnabled) {
+    activeLayers.push("guided voice");
+  }
+
+  soundStatus.textContent = activeLayers.length
+    ? `Playing ${activeLayers.join(" + ")}.`
+    : "Sound is on, with all layers muted.";
 }
 
 // ============================================================
@@ -103,9 +560,12 @@ const emotionalStates = {
     icon: "⚡",
     description: "Anxious, alert, tense, irritable",
     className: "state-fight",
-    breathingDuration: 4, // seconds
+    breathingPattern: { inhale: 4, hold: 2, exhale: 6 },
     breathingCycles: 3,
     breathingPhrase: "Slow your activation",
+    breathingStyle: "Slightly slower, with a controlled exhale",
+    breathingNote: "Longer exhales help reduce physical tension.",
+    orbProfile: { motion: "fight", inhaleEnd: 1.28 },
     color: "#456d9f",
     particles: { count: 60, speed: "fast" },
     prompts: [
@@ -140,9 +600,12 @@ const emotionalStates = {
     icon: "🕊️",
     description: "Restless, eager to escape, avoidant, busy",
     className: "state-flight",
-    breathingDuration: 5,
+    breathingPattern: { inhale: 4, hold: 4, exhale: 4 },
     breathingCycles: 3,
     breathingPhrase: "Settle into stillness",
+    breathingStyle: "Steady, rhythmic, and predictable",
+    breathingNote: "Box breathing creates a consistent sense of safety.",
+    orbProfile: { motion: "flight", inhaleEnd: 1.3 },
     color: "#508dc8",
     particles: { count: 45, speed: "medium" },
     prompts: [
@@ -177,9 +640,13 @@ const emotionalStates = {
     icon: "❄️",
     description: "Numb, disconnected, stuck, paralyzed",
     className: "state-freeze",
-    breathingDuration: 8,
+    breathingPattern: { inhale: 3, hold: 1, exhale: 4 },
+    holdLabel: "Soft pause",
     breathingCycles: 2,
     breathingPhrase: "Gently return to your body",
+    breathingStyle: "Very gentle, soft, and slow",
+    breathingNote: "A tiny pause keeps the breath supportive without forcing retention.",
+    orbProfile: { motion: "freeze", inhaleEnd: 1.18 },
     color: "#7081bf",
     particles: { count: 25, speed: "slow" },
     prompts: [
@@ -214,9 +681,12 @@ const emotionalStates = {
     icon: "⏸️",
     description: "Depressed, hopeless, empty, withdrawn",
     className: "state-shutdown",
-    breathingDuration: 7,
+    breathingPattern: { inhale: 5, hold: 1, exhale: 5 },
     breathingCycles: 2,
     breathingPhrase: "Breath by breath, moment by moment",
+    breathingStyle: "Deep, balanced, and not intense",
+    breathingNote: "Balanced breathing can restore presence without overstimulating.",
+    orbProfile: { motion: "shutdown", inhaleEnd: 1.22 },
     color: "#4a5464",
     particles: { count: 15, speed: "slow" },
     prompts: [
@@ -251,9 +721,12 @@ const emotionalStates = {
     icon: "🌊",
     description: "Overwhelmed, bombarded, fractured attention, chaotic",
     className: "state-overstimulated",
-    breathingDuration: 6,
+    breathingPattern: { inhale: 4, hold: 1, exhale: 6 },
     breathingCycles: 4,
     breathingPhrase: "Slow and steady. One thing at a time.",
+    breathingStyle: "Simple, repetitive, and low-complexity",
+    breathingNote: "A longer exhale reduces intensity and creates steadiness.",
+    orbProfile: { motion: "overstimulated", inhaleEnd: 1.26 },
     color: "#456d9f",
     particles: { count: 80, speed: "fast" },
     prompts: [
@@ -288,9 +761,12 @@ const emotionalStates = {
     icon: "🌙",
     description: "Peaceful, regulated, present, grounded",
     className: "state-calm",
-    breathingDuration: 6,
+    breathingPattern: { inhale: 5, hold: 2, exhale: 7 },
     breathingCycles: 5,
     breathingPhrase: "Rest and restoration",
+    breathingStyle: "Slow, fluid, and restorative",
+    breathingNote: "This rhythm helps maintain regulation and relaxation.",
+    orbProfile: { motion: "calm", inhaleEnd: 1.34 },
     color: "#7081bf",
     particles: { count: 35, speed: "slow" },
     prompts: [
@@ -322,6 +798,84 @@ const emotionalStates = {
   },
 };
 
+const affirmationsByState = {
+  fight: [
+    "My energy can become protection, clarity, and choice.",
+    "I can soften without surrendering my strength.",
+    "My body is allowed to stand down now.",
+    "I can meet this charge one steady exhale at a time.",
+  ],
+  flight: [
+    "I do not have to outrun this moment.",
+    "Stillness can be safe in small pieces.",
+    "I can pause and remain connected to myself.",
+    "A steady rhythm can carry me back to choice.",
+  ],
+  freeze: [
+    "I can return slowly, gently, and without force.",
+    "Small sensations are enough to begin again.",
+    "There is no rush to come back all at once.",
+    "Soft breath is still powerful breath.",
+  ],
+  shutdown: [
+    "One small action is a real movement toward life.",
+    "My presence matters even when my energy is low.",
+    "I can re-enter the day at a humane pace.",
+    "Gentleness is a valid form of strength.",
+  ],
+  overstimulated: [
+    "I can simplify the moment and choose one thing.",
+    "Not everything needs my attention right now.",
+    "My system can settle through repetition and space.",
+    "I can lower the volume of the world around me.",
+  ],
+  calm: [
+    "I can remember this feeling and return to it.",
+    "Regulation is something my body can learn again.",
+    "I am allowed to rest inside this steadiness.",
+    "This calm is not fragile; it is practice.",
+  ],
+};
+
+const guidedMeditationsByState = {
+  fight: [
+    "Let your jaw soften. Let your shoulders drop by one small degree.",
+    "Inhale steadily. Hold for a moment. Exhale longer than you think you need.",
+    "Notice the strength in your body without letting it take over the room.",
+    "Feel your feet beneath you. You are here, and you have options.",
+  ],
+  flight: [
+    "Let your eyes settle on one steady point.",
+    "Inhale for four. Hold for four. Exhale for four.",
+    "You do not have to leave this moment to be safe.",
+    "Let each breath make the next moment more predictable.",
+  ],
+  freeze: [
+    "Begin gently. Notice the air touching your nose or lips.",
+    "Inhale softly. Pause only if it feels kind. Exhale without force.",
+    "Wiggle one finger or one toe if that feels available.",
+    "You can return slowly. Small signals count.",
+  ],
+  shutdown: [
+    "Let this practice be very simple.",
+    "Inhale as if you are opening a small window. Pause. Exhale evenly.",
+    "You do not need a big shift. One breath is enough for now.",
+    "Let your attention come back to one small place of contact.",
+  ],
+  overstimulated: [
+    "Let the field narrow. One sound, one breath, one moment.",
+    "Inhale simply. Pause briefly. Exhale longer and let the edges soften.",
+    "You do not have to process everything at once.",
+    "Let repetition become a quiet container around you.",
+  ],
+  calm: [
+    "Notice what already feels steady.",
+    "Inhale slowly. Hold gently. Exhale as if you are making more room.",
+    "Let the calm become familiar without needing to hold it tightly.",
+    "Rest here for one more breath.",
+  ],
+};
+
 // ============================================================
 // DOM ELEMENTS
 // ============================================================
@@ -339,6 +893,8 @@ const breathingOrb = document.getElementById("breathingOrb");
 const startBreathingButton = document.getElementById("startBreathingButton");
 const breathingText = document.getElementById("breathingText");
 const breathingCount = document.getElementById("breathingCount");
+const breathingPattern = document.getElementById("breathingPattern");
+const breathingNote = document.getElementById("breathingNote");
 const promptText = document.getElementById("promptText");
 const nextPromptButton = document.getElementById("nextPromptButton");
 const groundingContent = document.getElementById("groundingContent");
@@ -346,6 +902,50 @@ const journalInput = document.getElementById("journalInput");
 const saveReflectionButton = document.getElementById("saveReflectionButton");
 const reflectionsList = document.getElementById("reflectionsList");
 const charCount = document.getElementById("charCount");
+const themeToggleButton = document.getElementById("themeToggleButton");
+const soundEnabledToggle = document.getElementById("soundEnabledToggle");
+const natureSoundToggle = document.getElementById("natureSoundToggle");
+const meditationSoundToggle = document.getElementById("meditationSoundToggle");
+const guidedMeditationToggle = document.getElementById("guidedMeditationToggle");
+const natureSoundSelect = document.getElementById("natureSoundSelect");
+const masterVolumeInput = document.getElementById("masterVolumeInput");
+const natureVolumeInput = document.getElementById("natureVolumeInput");
+const meditationVolumeInput = document.getElementById("meditationVolumeInput");
+const guidedMeditationButton = document.getElementById("guidedMeditationButton");
+const guidedMeditationText = document.getElementById("guidedMeditationText");
+const soundStatus = document.getElementById("soundStatus");
+const affirmationText = document.getElementById("affirmationText");
+const affirmationMeta = document.getElementById("affirmationMeta");
+const newAffirmationButton = document.getElementById("newAffirmationButton");
+const routineContent = document.getElementById("routineContent");
+const refreshRoutineButton = document.getElementById("refreshRoutineButton");
+const stateCountStat = document.getElementById("stateCountStat");
+const breathingCountStat = document.getElementById("breathingCountStat");
+const journalCountStat = document.getElementById("journalCountStat");
+const visitCountStat = document.getElementById("visitCountStat");
+const dominantStateStat = document.getElementById("dominantStateStat");
+const emotionTimeline = document.getElementById("emotionTimeline");
+const themeSelect = document.getElementById("themeSelect");
+const animationIntensityInput = document.getElementById(
+  "animationIntensityInput",
+);
+const particleDensityInput = document.getElementById("particleDensityInput");
+const blurStrengthInput = document.getElementById("blurStrengthInput");
+const glowIntensityInput = document.getElementById("glowIntensityInput");
+const fontScaleInput = document.getElementById("fontScaleInput");
+const reducedStimulationToggle = document.getElementById(
+  "reducedStimulationToggle",
+);
+const resetPreferencesButton = document.getElementById("resetPreferencesButton");
+
+let breathingIntervalId = null;
+let breathingAnimationFrameId = null;
+
+const defaultBreathingOrbScales = {
+  inhaleStart: 1,
+  inhaleEnd: 1.32,
+};
+let activeBreathingOrbScales = { ...defaultBreathingOrbScales };
 
 // ============================================================
 // PARTICLES SYSTEM
@@ -355,22 +955,30 @@ const charCount = document.getElementById("charCount");
  * Creates and manages floating particles in the background
  * @param {string} containerId - ID of the container where particles will be placed
  * @param {number} count - Number of particles to create
+ * @param {string} preferredSpeed - Optional speed profile for state-specific movement
  */
-function createParticles(containerId, count) {
+function createParticles(containerId, count, preferredSpeed = null) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
   // Clear existing particles
   container.innerHTML = "";
 
-  for (let i = 0; i < count; i++) {
+  const particleDensity = userPreferences.reducedStimulation
+    ? 0
+    : userPreferences.particleDensity / 100;
+  const adjustedCount = Math.round(count * particleDensity);
+
+  for (let i = 0; i < adjustedCount; i++) {
     const particle = document.createElement("div");
     particle.className = "particle";
 
     // Randomize particle properties
     const xPos = Math.random() * 100;
     const yPos = Math.random() * 100;
-    const speed = ["slow", "medium", "fast"][Math.floor(Math.random() * 3)];
+    const speed =
+      preferredSpeed ||
+      ["slow", "medium", "fast"][Math.floor(Math.random() * 3)];
     const delay = Math.random() * 5;
     const duration = ["slow", "medium", "fast"].includes(speed)
       ? speed === "slow"
@@ -445,6 +1053,7 @@ function generateEmotionGrid() {
 function selectEmotion(emotionKey, event) {
   appState.selectedEmotion = emotionKey;
   const state = emotionalStates[emotionKey];
+  trackEmotionSelection(emotionKey);
 
   // Update active card
   document.querySelectorAll(".emotion-card").forEach((card) => {
@@ -495,7 +1104,11 @@ function transitionToSection(targetSection) {
       regulationSection.classList.remove("hidden");
       regulationSection.classList.add("active");
       const state = emotionalStates[appState.selectedEmotion];
-      createParticles("particlesRegulation", state.particles.count);
+      createParticles(
+        "particlesRegulation",
+        state.particles.count,
+        state.particles.speed,
+      );
     }
   }, 100);
 
@@ -532,8 +1145,16 @@ function setupRegulationEnvironment(emotionKey) {
   // Load reflections
   loadReflections();
 
-  // Play state-specific meditative sound
-  playMeditationSound(emotionKey);
+  showAffirmation(emotionKey);
+  renderPersonalRoutine();
+  renderDashboard();
+  renderTimeline();
+  if (guidedMeditationText && !isGuidedMeditationPlaying) {
+    guidedMeditationText.textContent = `Guided voice is ready for ${state.name}.`;
+  }
+
+  // Sync state-specific audio and saved sound preferences
+  updateSoundscape();
 }
 
 // ============================================================
@@ -547,9 +1168,167 @@ function setupRegulationEnvironment(emotionKey) {
 function setupBreathingExercise(emotionKey) {
   const state = emotionalStates[emotionKey];
 
+  stopBreathingExercise();
+  applyOrbProfile(state);
+  breathingText.textContent = state.breathingPhrase;
+  breathingCount.textContent = "";
+  breathingPattern.textContent = formatBreathingPattern(state);
+  breathingNote.textContent = state.breathingNote;
+
   startBreathingButton.onclick = () => {
     startBreathingExercise(emotionKey);
   };
+}
+
+function getBreathingPhases(state) {
+  const pattern = state.breathingPattern;
+  const phases = [
+    { label: "Inhale", type: "inhale", duration: pattern.inhale },
+  ];
+
+  if (pattern.hold > 0) {
+    phases.push({
+      label: state.holdLabel || "Hold",
+      type: "hold",
+      duration: pattern.hold,
+    });
+  }
+
+  phases.push({ label: "Exhale", type: "exhale", duration: pattern.exhale });
+  return phases;
+}
+
+function formatBreathingPattern(state) {
+  const pattern = state.breathingPattern;
+  const holdText =
+    pattern.hold > 0
+      ? `${state.holdLabel || "Hold"} ${pattern.hold}`
+      : "No hold";
+
+  return `${state.breathingStyle}: inhale ${pattern.inhale}, ${holdText.toLowerCase()}, exhale ${pattern.exhale}.`;
+}
+
+function applyOrbProfile(state) {
+  const profile = state.orbProfile || {};
+
+  activeBreathingOrbScales = {
+    ...defaultBreathingOrbScales,
+    inhaleEnd: profile.inhaleEnd || defaultBreathingOrbScales.inhaleEnd,
+  };
+
+  if (profile.motion) {
+    breathingOrb.dataset.motion = profile.motion;
+  } else {
+    breathingOrb.removeAttribute("data-motion");
+  }
+
+  setBreathingOrbScale(activeBreathingOrbScales.inhaleStart);
+}
+
+function easeInOutSine(progress) {
+  return -(Math.cos(Math.PI * progress) - 1) / 2;
+}
+
+function easeOutCubic(progress) {
+  return 1 - Math.pow(1 - progress, 3);
+}
+
+function easeInOutQuad(progress) {
+  return progress < 0.5
+    ? 2 * progress * progress
+    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+}
+
+function easeBreathProgress(progress, phaseType, motion) {
+  if (motion === "fight" && phaseType === "inhale") {
+    return easeOutCubic(progress);
+  }
+
+  if (motion === "shutdown") {
+    return easeInOutQuad(progress);
+  }
+
+  return easeInOutSine(progress);
+}
+
+function setBreathingOrbScale(scale) {
+  const glowProgress =
+    (scale - activeBreathingOrbScales.inhaleStart) /
+    (activeBreathingOrbScales.inhaleEnd -
+      activeBreathingOrbScales.inhaleStart);
+  const safeGlowProgress = Math.max(0, Math.min(glowProgress, 1));
+
+  breathingOrb.style.setProperty("--orb-scale", scale.toFixed(3));
+  breathingOrb.style.setProperty(
+    "--orb-glow-primary",
+    `${60 + 20 * safeGlowProgress}px`,
+  );
+  breathingOrb.style.setProperty(
+    "--orb-glow-secondary",
+    `${100 + 50 * safeGlowProgress}px`,
+  );
+}
+
+function animateBreathingOrb(phase, state) {
+  if (breathingAnimationFrameId) {
+    cancelAnimationFrame(breathingAnimationFrameId);
+  }
+
+  const startTime = performance.now();
+  const durationMs = phase.duration * 1000;
+  const startScale =
+    phase.type === "exhale"
+      ? activeBreathingOrbScales.inhaleEnd
+      : activeBreathingOrbScales.inhaleStart;
+  const endScale =
+    phase.type === "inhale"
+      ? activeBreathingOrbScales.inhaleEnd
+      : activeBreathingOrbScales.inhaleStart;
+  const motion = state.orbProfile ? state.orbProfile.motion : "calm";
+
+  breathingOrb.dataset.phase = phase.type;
+
+  if (phase.type === "hold") {
+    setBreathingOrbScale(activeBreathingOrbScales.inhaleEnd);
+    return;
+  }
+
+  if (phase.duration <= 0) {
+    setBreathingOrbScale(endScale);
+    return;
+  }
+
+  function updateOrbScale(now) {
+    const rawProgress = Math.min((now - startTime) / durationMs, 1);
+    const easedProgress = easeBreathProgress(rawProgress, phase.type, motion);
+    const scale = startScale + (endScale - startScale) * easedProgress;
+
+    setBreathingOrbScale(scale);
+
+    if (rawProgress < 1 && appState.isBreathingActive) {
+      breathingAnimationFrameId = requestAnimationFrame(updateOrbScale);
+    }
+  }
+
+  breathingAnimationFrameId = requestAnimationFrame(updateOrbScale);
+}
+
+function stopBreathingExercise() {
+  if (breathingIntervalId) {
+    clearInterval(breathingIntervalId);
+    breathingIntervalId = null;
+  }
+
+  if (breathingAnimationFrameId) {
+    cancelAnimationFrame(breathingAnimationFrameId);
+    breathingAnimationFrameId = null;
+  }
+
+  appState.isBreathingActive = false;
+  startBreathingButton.disabled = false;
+  breathingOrb.classList.remove("breathing");
+  breathingOrb.removeAttribute("data-phase");
+  setBreathingOrbScale(activeBreathingOrbScales.inhaleStart);
 }
 
 /**
@@ -557,31 +1336,27 @@ function setupBreathingExercise(emotionKey) {
  * @param {string} emotionKey - Key of the selected emotional state
  */
 function startBreathingExercise(emotionKey) {
+  stopBreathingExercise();
+
   const state = emotionalStates[emotionKey];
   appState.isBreathingActive = true;
   startBreathingButton.disabled = true;
 
   let cycleCount = 0;
-  const phases = ["Inhale", "Hold", "Exhale"];
+  const phases = getBreathingPhases(state);
   let phaseIndex = 0;
-  let phaseTime = state.breathingDuration;
+  let phaseTime = phases[phaseIndex].duration;
 
-  // Add breathing animation to orb
+  // Restart the CSS motion profile each time a new exercise begins.
+  breathingOrb.classList.remove("breathing");
+  void breathingOrb.offsetWidth;
   breathingOrb.classList.add("breathing");
-
-  // Determine animation speed
-  if (state.breathingDuration <= 4) {
-    breathingOrb.classList.add("fast-breath");
-  } else if (state.breathingDuration >= 7) {
-    breathingOrb.classList.add("slow-breath");
-  } else if (state.breathingDuration <= 5) {
-    breathingOrb.classList.add("combat");
-  }
-
-  breathingText.textContent = phases[0];
+  breathingText.textContent = phases[phaseIndex].label;
+  breathingCount.textContent = phaseTime;
+  animateBreathingOrb(phases[phaseIndex], state);
 
   // Breathing loop
-  const breathingInterval = setInterval(() => {
+  breathingIntervalId = setInterval(() => {
     phaseTime--;
     breathingCount.textContent = phaseTime > 0 ? phaseTime : "Now";
 
@@ -595,25 +1370,25 @@ function startBreathingExercise(emotionKey) {
 
       if (cycleCount >= state.breathingCycles) {
         // Breathing complete
-        clearInterval(breathingInterval);
-        breathingOrb.classList.remove(
-          "breathing",
-          "fast-breath",
-          "slow-breath",
-          "combat",
-        );
+        stopBreathingExercise();
+        trackBreathingSession(emotionKey);
         breathingText.textContent = "Complete";
-        breathingCount.textContent = "✓";
-        startBreathingButton.disabled = false;
-        appState.isBreathingActive = false;
+        breathingCount.textContent = "Done";
 
         setTimeout(() => {
-          breathingText.textContent = "Get ready...";
-          breathingCount.textContent = "";
+          if (
+            appState.selectedEmotion === emotionKey &&
+            !appState.isBreathingActive
+          ) {
+            breathingText.textContent = state.breathingPhrase;
+            breathingCount.textContent = "";
+          }
         }, 2000);
       } else {
-        breathingText.textContent = phases[phaseIndex];
-        phaseTime = state.breathingDuration;
+        breathingText.textContent = phases[phaseIndex].label;
+        phaseTime = phases[phaseIndex].duration;
+        breathingCount.textContent = phaseTime;
+        animateBreathingOrb(phases[phaseIndex], state);
       }
     }
   }, 1000);
@@ -679,6 +1454,520 @@ function displayPrompt(emotionKey) {
 }
 
 // ============================================================
+// WELLNESS MEMORY, AFFIRMATIONS, ROUTINES & DASHBOARD
+// ============================================================
+
+function getReflections() {
+  const reflections = readStorage(storageKeys.reflections, []);
+  return Array.isArray(reflections) ? reflections : [];
+}
+
+function getStateKeyFromName(stateName) {
+  const entry = Object.entries(emotionalStates).find(
+    ([, state]) => state.name === stateName,
+  );
+  return entry ? entry[0] : "calm";
+}
+
+function formatStoredDate(value) {
+  const date = value ? new Date(value) : new Date();
+
+  if (Number.isNaN(date.getTime())) {
+    return "Recently";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function normalizeStoredDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+}
+
+function isSameDay(firstDate, secondDate) {
+  return (
+    firstDate.getFullYear() === secondDate.getFullYear() &&
+    firstDate.getMonth() === secondDate.getMonth() &&
+    firstDate.getDate() === secondDate.getDate()
+  );
+}
+
+function trackEmotionSelection(emotionKey) {
+  const state = emotionalStates[emotionKey];
+  const now = new Date();
+
+  activityData.emotionHistory.unshift({
+    id: now.getTime(),
+    stateKey: emotionKey,
+    stateName: state.name,
+    color: state.color,
+    createdAt: now.toISOString(),
+  });
+
+  saveActivity();
+}
+
+function trackBreathingSession(emotionKey) {
+  const state = emotionalStates[emotionKey];
+  const now = new Date();
+
+  activityData.breathingSessions.unshift({
+    id: now.getTime(),
+    stateKey: emotionKey,
+    stateName: state.name,
+    pattern: state.breathingPattern,
+    cycles: state.breathingCycles,
+    createdAt: now.toISOString(),
+  });
+
+  saveActivity();
+  renderDashboard();
+  renderTimeline();
+  renderPersonalRoutine();
+}
+
+function trackAppVisit() {
+  const now = new Date();
+
+  activityData.appVisits.unshift({
+    id: now.getTime(),
+    createdAt: now.toISOString(),
+  });
+
+  saveActivity();
+}
+
+function countByState(records) {
+  return records.reduce((totals, record) => {
+    const key = record.stateKey || getStateKeyFromName(record.stateName);
+    totals[key] = (totals[key] || 0) + 1;
+    return totals;
+  }, {});
+}
+
+function getDominantStateKey() {
+  const stateCounts = countByState(activityData.emotionHistory);
+  const rankedStates = Object.entries(stateCounts).sort((a, b) => b[1] - a[1]);
+  return rankedStates.length
+    ? rankedStates[0][0]
+    : appState.selectedEmotion || "calm";
+}
+
+function getRoutineStateKey() {
+  if (appState.selectedEmotion) return appState.selectedEmotion;
+
+  const recentStates = activityData.emotionHistory.slice(0, 6);
+  if (!recentStates.length) return "calm";
+
+  const recentCounts = countByState(recentStates);
+  return Object.entries(recentCounts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function showAffirmation(emotionKey = getRoutineStateKey(), forceNew = false) {
+  const today = new Date();
+  const lastAffirmation = readStorage(storageKeys.lastAffirmation, null);
+
+  if (
+    !forceNew &&
+    lastAffirmation &&
+    lastAffirmation.stateKey === emotionKey &&
+    isSameDay(new Date(lastAffirmation.createdAt), today)
+  ) {
+    renderAffirmation(lastAffirmation);
+    return;
+  }
+
+  const affirmations =
+    affirmationsByState[emotionKey] || affirmationsByState.calm;
+  const previousText = lastAffirmation ? lastAffirmation.text : "";
+  const candidates = affirmations.filter((text) => text !== previousText);
+  const selectedText =
+    candidates[Math.floor(Math.random() * candidates.length)] || affirmations[0];
+
+  const affirmation = {
+    text: selectedText,
+    stateKey: emotionKey,
+    stateName: emotionalStates[emotionKey].name,
+    createdAt: today.toISOString(),
+  };
+
+  writeStorage(storageKeys.lastAffirmation, affirmation);
+  renderAffirmation(affirmation);
+}
+
+function renderAffirmation(affirmation) {
+  if (!affirmationText || !affirmationMeta || !affirmation) return;
+
+  affirmationText.textContent = affirmation.text;
+  affirmationMeta.textContent = `${affirmation.stateName} affirmation shown ${formatStoredDate(
+    affirmation.createdAt,
+  )}.`;
+}
+
+function renderDashboard() {
+  if (!stateCountStat) return;
+
+  const reflections = getReflections();
+  const dominantStateKey = getDominantStateKey();
+  const dominantState = emotionalStates[dominantStateKey];
+  const dominantCount =
+    countByState(activityData.emotionHistory)[dominantStateKey] || 0;
+  const latestVisit = activityData.appVisits[0];
+
+  stateCountStat.textContent = activityData.emotionHistory.length;
+  breathingCountStat.textContent = activityData.breathingSessions.length;
+  journalCountStat.textContent = reflections.length;
+  visitCountStat.textContent = activityData.appVisits.length;
+
+  dominantStateStat.textContent = activityData.emotionHistory.length
+    ? `${dominantState.name} has appeared most often in your check-ins (${dominantCount} total). Latest visit: ${formatStoredDate(
+        latestVisit ? latestVisit.createdAt : null,
+      )}.`
+    : `Your pattern will build as you choose states and complete sessions. Latest visit: ${formatStoredDate(
+        latestVisit ? latestVisit.createdAt : null,
+      )}.`;
+}
+
+function renderTimeline() {
+  if (!emotionTimeline) return;
+
+  const reflectionEvents = getReflections().map((reflection) => {
+    const stateKey =
+      reflection.emotionKey || getStateKeyFromName(reflection.emotion);
+
+    return {
+      type: "reflection",
+      stateKey,
+      stateName: reflection.emotion || emotionalStates[stateKey].name,
+      text: reflection.text,
+      createdAt: reflection.createdAt || normalizeStoredDate(reflection.id),
+    };
+  });
+
+  const stateEvents = activityData.emotionHistory.map((event) => ({
+    ...event,
+    type: "state",
+    text: "State selected",
+  }));
+
+  const timelineEvents = [...stateEvents, ...reflectionEvents]
+    .filter((event) => event.createdAt)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 16);
+
+  if (!timelineEvents.length) {
+    emotionTimeline.innerHTML =
+      '<p class="module-note">Your timeline will appear after your first check-in.</p>';
+    return;
+  }
+
+  emotionTimeline.innerHTML = timelineEvents
+    .map((event) => {
+      const state = emotionalStates[event.stateKey] || emotionalStates.calm;
+      const label =
+        event.type === "reflection"
+          ? `${event.stateName} reflection`
+          : `${event.stateName} check-in`;
+
+      return `
+        <div class="timeline-item" style="--timeline-color: ${state.color}">
+          <div class="timeline-label">${escapeHtml(label)}</div>
+          <div class="timeline-date">${formatStoredDate(event.createdAt)}</div>
+          <div class="timeline-text">${escapeHtml(event.text || "")}</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function formatRoutineBreath(state) {
+  const pattern = state.breathingPattern;
+  const holdText = pattern.hold > 0 ? pattern.hold : 0;
+  return `${pattern.inhale}-${holdText}-${pattern.exhale}`;
+}
+
+function renderPersonalRoutine() {
+  if (!routineContent) return;
+
+  const stateKey = getRoutineStateKey();
+  const state = emotionalStates[stateKey];
+  const sessionCount = activityData.breathingSessions.filter(
+    (session) => session.stateKey === stateKey,
+  ).length;
+  const reflectionCount = getReflections().filter(
+    (reflection) =>
+      (reflection.emotionKey || getStateKeyFromName(reflection.emotion)) ===
+      stateKey,
+  ).length;
+  const promptIndex = (sessionCount + reflectionCount) % state.prompts.length;
+  const firstTechnique =
+    state.groundingTechniques[promptIndex % state.groundingTechniques.length];
+  const secondTechnique =
+    state.groundingTechniques[
+      (promptIndex + 1) % state.groundingTechniques.length
+    ];
+
+  routineContent.innerHTML = `
+    <div class="routine-chip-row">
+      <span class="routine-chip">${state.name}</span>
+      <span class="routine-chip">${formatRoutineBreath(state)} breath</span>
+      <span class="routine-chip">${state.breathingCycles} cycles</span>
+    </div>
+    <div class="routine-step">
+      <div class="routine-step-title">Breath</div>
+      <div>${escapeHtml(state.breathingStyle)}. Follow ${formatRoutineBreath(
+        state,
+      )} for ${state.breathingCycles} cycles.</div>
+    </div>
+    <div class="routine-step">
+      <div class="routine-step-title">Prompt</div>
+      <div>${escapeHtml(state.prompts[promptIndex])}</div>
+    </div>
+    <div class="routine-step">
+      <div class="routine-step-title">Grounding</div>
+      <div>${escapeHtml(firstTechnique.title)}: ${escapeHtml(
+        firstTechnique.text,
+      )}</div>
+      <div>${escapeHtml(secondTechnique.title)}: ${escapeHtml(
+        secondTechnique.text,
+      )}</div>
+    </div>
+    <div class="routine-step">
+      <div class="routine-step-title">Pattern</div>
+      <div>${sessionCount} completed breathing sessions and ${reflectionCount} reflections for this state are shaping this recommendation.</div>
+    </div>
+  `;
+}
+
+function refreshParticlesForCurrentSection() {
+  if (appState.currentSection === "hero") {
+    createParticles("particlesHero", 30);
+    return;
+  }
+
+  if (appState.currentSection === "state") {
+    createParticles("particlesState", 40);
+    return;
+  }
+
+  if (appState.currentSection === "regulation" && appState.selectedEmotion) {
+    const state = emotionalStates[appState.selectedEmotion];
+    createParticles(
+      "particlesRegulation",
+      state.particles.count,
+      state.particles.speed,
+    );
+  }
+}
+
+function applyPreferences(options = {}) {
+  const { refreshParticles = true, updateAudio = true } = options;
+
+  document.body.classList.toggle(
+    "theme-light",
+    userPreferences.theme === "light",
+  );
+  document.body.classList.toggle("theme-dark", userPreferences.theme === "dark");
+  document.body.classList.toggle(
+    "reduced-stimulation",
+    userPreferences.reducedStimulation,
+  );
+  document.body.classList.toggle(
+    "motion-minimal",
+    userPreferences.animationIntensity <= 25,
+  );
+  document.body.classList.toggle(
+    "motion-soft",
+    userPreferences.animationIntensity > 25 &&
+      userPreferences.animationIntensity <= 60,
+  );
+
+  document.documentElement.style.setProperty(
+    "--accessibility-blur",
+    `${userPreferences.blurStrength}px`,
+  );
+  document.documentElement.style.setProperty(
+    "--glow-intensity",
+    (userPreferences.glowIntensity / 100).toFixed(2),
+  );
+  document.documentElement.style.setProperty(
+    "--font-scale",
+    (userPreferences.fontScale / 100).toFixed(2),
+  );
+
+  syncPreferenceControls();
+  if (refreshParticles) refreshParticlesForCurrentSection();
+  if (updateAudio) updateSoundscape();
+}
+
+function syncPreferenceControls() {
+  if (themeSelect) themeSelect.value = userPreferences.theme;
+  if (themeToggleButton) {
+    const isLight = userPreferences.theme === "light";
+    themeToggleButton.textContent = isLight ? "Dark Mode" : "Light Mode";
+    themeToggleButton.setAttribute("aria-pressed", String(isLight));
+  }
+
+  if (soundEnabledToggle) {
+    soundEnabledToggle.checked = userPreferences.soundEnabled;
+  }
+  if (natureSoundToggle) natureSoundToggle.checked = userPreferences.natureEnabled;
+  if (meditationSoundToggle) {
+    meditationSoundToggle.checked = userPreferences.meditationEnabled;
+  }
+  updateGuidedMeditationControls();
+  if (natureSoundSelect) natureSoundSelect.value = userPreferences.natureType;
+  if (masterVolumeInput) masterVolumeInput.value = userPreferences.masterVolume;
+  if (natureVolumeInput) natureVolumeInput.value = userPreferences.natureVolume;
+  if (meditationVolumeInput) {
+    meditationVolumeInput.value = userPreferences.meditationVolume;
+  }
+  if (animationIntensityInput) {
+    animationIntensityInput.value = userPreferences.animationIntensity;
+  }
+  if (particleDensityInput) {
+    particleDensityInput.value = userPreferences.particleDensity;
+  }
+  if (blurStrengthInput) blurStrengthInput.value = userPreferences.blurStrength;
+  if (glowIntensityInput) {
+    glowIntensityInput.value = userPreferences.glowIntensity;
+  }
+  if (fontScaleInput) fontScaleInput.value = userPreferences.fontScale;
+  if (reducedStimulationToggle) {
+    reducedStimulationToggle.checked = userPreferences.reducedStimulation;
+  }
+}
+
+function updatePreference(key, value) {
+  if (key === "natureType") {
+    stopNatureSound();
+  }
+
+  if (key === "guidedMeditationEnabled" && !value) {
+    stopGuidedMeditation();
+  }
+
+  userPreferences[key] = value;
+  savePreferences();
+
+  const particleKeys = ["particleDensity", "reducedStimulation"];
+  const soundKeys = [
+    "soundEnabled",
+    "natureEnabled",
+    "meditationEnabled",
+    "guidedMeditationEnabled",
+    "natureType",
+    "masterVolume",
+    "natureVolume",
+    "meditationVolume",
+  ];
+
+  applyPreferences({
+    refreshParticles: particleKeys.includes(key),
+    updateAudio: soundKeys.includes(key),
+  });
+}
+
+function bindWellnessControls() {
+  if (themeToggleButton) {
+    themeToggleButton.addEventListener("click", () => {
+      updatePreference(
+        "theme",
+        userPreferences.theme === "light" ? "dark" : "light",
+      );
+    });
+  }
+
+  if (themeSelect) {
+    themeSelect.addEventListener("change", (event) => {
+      updatePreference("theme", event.target.value);
+    });
+  }
+
+  if (soundEnabledToggle) {
+    soundEnabledToggle.addEventListener("change", (event) => {
+      updatePreference("soundEnabled", event.target.checked);
+    });
+  }
+
+  if (natureSoundToggle) {
+    natureSoundToggle.addEventListener("change", (event) => {
+      updatePreference("natureEnabled", event.target.checked);
+    });
+  }
+
+  if (meditationSoundToggle) {
+    meditationSoundToggle.addEventListener("change", (event) => {
+      updatePreference("meditationEnabled", event.target.checked);
+    });
+  }
+
+  if (guidedMeditationToggle) {
+    guidedMeditationToggle.addEventListener("change", (event) => {
+      updatePreference("guidedMeditationEnabled", event.target.checked);
+    });
+  }
+
+  if (guidedMeditationButton) {
+    guidedMeditationButton.addEventListener("click", toggleGuidedMeditation);
+  }
+
+  if (natureSoundSelect) {
+    natureSoundSelect.addEventListener("change", (event) => {
+      updatePreference("natureType", event.target.value);
+    });
+  }
+
+  [
+    ["masterVolume", masterVolumeInput],
+    ["natureVolume", natureVolumeInput],
+    ["meditationVolume", meditationVolumeInput],
+    ["animationIntensity", animationIntensityInput],
+    ["particleDensity", particleDensityInput],
+    ["blurStrength", blurStrengthInput],
+    ["glowIntensity", glowIntensityInput],
+    ["fontScale", fontScaleInput],
+  ].forEach(([preferenceKey, input]) => {
+    if (!input) return;
+
+    input.addEventListener("input", (event) => {
+      updatePreference(preferenceKey, Number(event.target.value));
+    });
+  });
+
+  if (reducedStimulationToggle) {
+    reducedStimulationToggle.addEventListener("change", (event) => {
+      updatePreference("reducedStimulation", event.target.checked);
+    });
+  }
+
+  if (newAffirmationButton) {
+    newAffirmationButton.addEventListener("click", () => {
+      showAffirmation(getRoutineStateKey(), true);
+    });
+  }
+
+  if (refreshRoutineButton) {
+    refreshRoutineButton.addEventListener("click", renderPersonalRoutine);
+  }
+
+  if (resetPreferencesButton) {
+    resetPreferencesButton.addEventListener("click", () => {
+      userPreferences = { ...defaultPreferences };
+      savePreferences();
+      stopNatureSound();
+      stopMeditationSound();
+      applyPreferences();
+    });
+  }
+}
+
+// ============================================================
 // REFLECTION JOURNAL MODULE
 // ============================================================
 
@@ -699,12 +1988,15 @@ function saveReflection() {
     return;
   }
 
+  const now = new Date();
   const reflection = {
-    id: Date.now(),
+    id: now.getTime(),
     text: text,
+    emotionKey: appState.selectedEmotion,
     emotion: emotionalStates[appState.selectedEmotion].name,
-    timestamp: new Date().toLocaleString(),
-    date: new Date().toLocaleDateString("en-US", {
+    timestamp: now.toLocaleString(),
+    createdAt: now.toISOString(),
+    date: now.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -714,16 +2006,14 @@ function saveReflection() {
   };
 
   // Load existing reflections
-  let reflections = JSON.parse(
-    localStorage.getItem("landstrongReflections") || "[]",
-  );
+  let reflections = getReflections();
   reflections.unshift(reflection);
 
   // Keep only last 20 reflections
   reflections = reflections.slice(0, 20);
 
   // Save to localStorage
-  localStorage.setItem("landstrongReflections", JSON.stringify(reflections));
+  writeStorage(storageKeys.reflections, reflections);
 
   // Clear input
   journalInput.value = "";
@@ -731,6 +2021,9 @@ function saveReflection() {
 
   // Reload reflections display
   loadReflections();
+  renderDashboard();
+  renderTimeline();
+  renderPersonalRoutine();
 
   // Visual feedback
   saveReflectionButton.textContent = "Saved ✓";
@@ -743,9 +2036,7 @@ function saveReflection() {
  * Loads and displays saved reflections from localStorage
  */
 function loadReflections() {
-  const reflections = JSON.parse(
-    localStorage.getItem("landstrongReflections") || "[]",
-  );
+  const reflections = getReflections();
   reflectionsList.innerHTML = "";
 
   if (reflections.length === 0) {
@@ -794,6 +2085,12 @@ beginButton.addEventListener("click", () => {
  * Back button - returns to emotion selection
  */
 backButton.addEventListener("click", () => {
+  stopBreathingExercise();
+  stopMeditationSound();
+  stopGuidedMeditation("Guided voice will follow the selected state.");
+  updateSoundStatus();
+  breathingText.textContent = "Get ready...";
+  breathingCount.textContent = "";
   transitionToSection("state");
 });
 
@@ -802,18 +2099,13 @@ backButton.addEventListener("click", () => {
  */
 resetButton.addEventListener("click", () => {
   appState.selectedEmotion = null;
-  appState.isBreathingActive = false;
-  breathingOrb.classList.remove(
-    "breathing",
-    "fast-breath",
-    "slow-breath",
-    "combat",
-  );
+  stopBreathingExercise();
   breathingText.textContent = "Get ready...";
   breathingCount.textContent = "";
   journalInput.value = "";
   charCount.textContent = "0";
   stopMeditationSound();
+  stopGuidedMeditation("Guided voice will follow the selected state.");
   transitionToSection("hero");
 });
 
@@ -825,6 +2117,10 @@ resetButton.addEventListener("click", () => {
  * Initializes the entire application on page load
  */
 function initializeApp() {
+  applyPreferences({ refreshParticles: false, updateAudio: false });
+  bindWellnessControls();
+  trackAppVisit();
+
   // Show hero section
   heroSection.classList.add("active");
 
@@ -833,6 +2129,17 @@ function initializeApp() {
 
   // Set up accessibility
   setupAccessibility();
+
+  renderDashboard();
+  renderTimeline();
+  renderPersonalRoutine();
+  const lastAffirmation = readStorage(storageKeys.lastAffirmation, null);
+  if (lastAffirmation) {
+    renderAffirmation(lastAffirmation);
+  } else {
+    showAffirmation("calm");
+  }
+  updateSoundStatus();
 
   // Log initialization
   console.log("LandStrong Nervous System Simulator initialized");
@@ -863,6 +2170,10 @@ function setupAccessibility() {
 
   // Add label to textarea
   journalInput.setAttribute("aria-label", "Reflection journal text input");
+
+  if (affirmationText) affirmationText.setAttribute("aria-live", "polite");
+  if (routineContent) routineContent.setAttribute("aria-live", "polite");
+  if (emotionTimeline) emotionTimeline.setAttribute("aria-live", "polite");
 }
 
 // ============================================================
@@ -905,7 +2216,11 @@ const sectionObserver = new IntersectionObserver((entries) => {
       if (container) {
         const state = emotionalStates[appState.selectedEmotion];
         const count = state ? state.particles.count : 30;
-        createParticles(container.id, count);
+        createParticles(
+          container.id,
+          count,
+          state ? state.particles.speed : null,
+        );
         entry.target.dataset.particlesLoaded = true;
       }
     }

@@ -94,9 +94,18 @@
           <!-- Header with current state -->
           <div class="regulation-header">
             <h2 id="currentState" class="state-title">State: Calm</h2>
-            <button id="backButton" class="btn btn-secondary btn-small">
+            <div class="header-actions">
+              <button
+                id="themeToggleButton"
+                class="btn btn-outline btn-small"
+                aria-pressed="false"
+              >
+                Light Mode
+              </button>
+              <button id="backButton" class="btn btn-secondary btn-small">
               ← Back
-            </button>
+              </button>
+            </div>
           </div>
 
           <!-- Main Regulation Container -->
@@ -110,6 +119,8 @@
                 <div class="breathing-guidance">
                   <p id="breathingText" class="breathing-text">Get ready...</p>
                   <p id="breathingCount" class="breathing-count"></p>
+                  <p id="breathingPattern" class="breathing-pattern"></p>
+                  <p id="breathingNote" class="breathing-note"></p>
                 </div>
               </div>
               <button
@@ -136,6 +147,213 @@
                 Next Reminder
               </button>
             </div>
+          </div>
+
+          <!-- Personalized Wellness Tools -->
+          <div class="wellness-grid" aria-label="Personal wellness tools">
+            <div class="module sound-module">
+              <h3>Soundscape</h3>
+              <div class="sound-controls">
+                <label class="toggle-row" for="soundEnabledToggle">
+                  <span>Sound System</span>
+                  <input id="soundEnabledToggle" type="checkbox" />
+                </label>
+                <label class="toggle-row" for="natureSoundToggle">
+                  <span>Nature Loop</span>
+                  <input id="natureSoundToggle" type="checkbox" />
+                </label>
+                <label class="toggle-row" for="meditationSoundToggle">
+                  <span>Meditation Tone</span>
+                  <input id="meditationSoundToggle" type="checkbox" />
+                </label>
+                <label class="toggle-row" for="guidedMeditationToggle">
+                  <span>Guided Voice</span>
+                  <input id="guidedMeditationToggle" type="checkbox" />
+                </label>
+
+                <label class="control-field" for="natureSoundSelect">
+                  <span>Nature Texture</span>
+                  <select id="natureSoundSelect">
+                    <option value="rain">Rain</option>
+                    <option value="ocean">Ocean</option>
+                    <option value="forest">Forest</option>
+                  </select>
+                </label>
+
+                <label class="control-field" for="masterVolumeInput">
+                  <span>Master Volume</span>
+                  <input
+                    id="masterVolumeInput"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="35"
+                  />
+                </label>
+                <label class="control-field" for="natureVolumeInput">
+                  <span>Nature Volume</span>
+                  <input
+                    id="natureVolumeInput"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="35"
+                  />
+                </label>
+                <label class="control-field" for="meditationVolumeInput">
+                  <span>Meditation Volume</span>
+                  <input
+                    id="meditationVolumeInput"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="25"
+                  />
+                </label>
+              </div>
+              <button
+                id="guidedMeditationButton"
+                class="btn btn-outline btn-small sound-action"
+              >
+                Play Guidance
+              </button>
+              <p id="guidedMeditationText" class="guided-meditation-text">
+                Guided voice will follow the selected state.
+              </p>
+              <p id="soundStatus" class="module-note" aria-live="polite">
+                Sound is ready when you are.
+              </p>
+            </div>
+
+            <div class="module affirmation-module">
+              <h3>Daily Affirmation</h3>
+              <p id="affirmationText" class="affirmation-text">
+                Choose a state to receive a reflection.
+              </p>
+              <p id="affirmationMeta" class="module-note"></p>
+              <button
+                id="newAffirmationButton"
+                class="btn btn-outline btn-small"
+              >
+                New Affirmation
+              </button>
+            </div>
+
+            <div class="module routine-module">
+              <h3>Personal Routine</h3>
+              <div id="routineContent" class="routine-content">
+                Your routine will appear after you choose a state.
+              </div>
+              <button id="refreshRoutineButton" class="btn btn-outline btn-small">
+                Refresh Routine
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress and History -->
+          <div class="insights-grid" aria-label="Mood tracking and progress">
+            <div class="module dashboard-module">
+              <h3>Progress Dashboard</h3>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span id="stateCountStat" class="stat-value">0</span>
+                  <span class="stat-label">States Logged</span>
+                </div>
+                <div class="stat-item">
+                  <span id="breathingCountStat" class="stat-value">0</span>
+                  <span class="stat-label">Breathing Sessions</span>
+                </div>
+                <div class="stat-item">
+                  <span id="journalCountStat" class="stat-value">0</span>
+                  <span class="stat-label">Journal Entries</span>
+                </div>
+                <div class="stat-item">
+                  <span id="visitCountStat" class="stat-value">0</span>
+                  <span class="stat-label">App Visits</span>
+                </div>
+              </div>
+              <div id="dominantStateStat" class="dashboard-summary">
+                Your pattern will build over time.
+              </div>
+            </div>
+
+            <div class="module timeline-module">
+              <h3>Emotion History</h3>
+              <div id="emotionTimeline" class="emotion-timeline">
+                Your timeline will appear here.
+              </div>
+            </div>
+          </div>
+
+          <!-- Accessibility and Theme Settings -->
+          <div class="module settings-module">
+            <h3>Accessibility & Theme</h3>
+            <div class="settings-grid">
+              <label class="control-field" for="themeSelect">
+                <span>Theme</span>
+                <select id="themeSelect">
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                </select>
+              </label>
+              <label class="control-field" for="animationIntensityInput">
+                <span>Animation Intensity</span>
+                <input
+                  id="animationIntensityInput"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="70"
+                />
+              </label>
+              <label class="control-field" for="particleDensityInput">
+                <span>Particle Density</span>
+                <input
+                  id="particleDensityInput"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="70"
+                />
+              </label>
+              <label class="control-field" for="blurStrengthInput">
+                <span>Blur Strength</span>
+                <input
+                  id="blurStrengthInput"
+                  type="range"
+                  min="0"
+                  max="30"
+                  value="10"
+                />
+              </label>
+              <label class="control-field" for="glowIntensityInput">
+                <span>Glow Intensity</span>
+                <input
+                  id="glowIntensityInput"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="70"
+                />
+              </label>
+              <label class="control-field" for="fontScaleInput">
+                <span>Font Scale</span>
+                <input
+                  id="fontScaleInput"
+                  type="range"
+                  min="90"
+                  max="125"
+                  value="100"
+                />
+              </label>
+              <label class="toggle-row" for="reducedStimulationToggle">
+                <span>Reduced Stimulation</span>
+                <input id="reducedStimulationToggle" type="checkbox" />
+              </label>
+            </div>
+            <button id="resetPreferencesButton" class="btn btn-secondary btn-small">
+              Reset Preferences
+            </button>
           </div>
 
           <!-- Reflection Journal Section -->
