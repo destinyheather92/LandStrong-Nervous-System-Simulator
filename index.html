@@ -102,6 +102,17 @@
               >
                 Light Mode
               </button>
+              <label class="header-font-control" for="fontScaleInput">
+                <span>Font</span>
+                <input
+                  id="fontScaleInput"
+                  type="range"
+                  min="90"
+                  max="125"
+                  value="100"
+                  aria-label="Font scale"
+                />
+              </label>
               <button id="backButton" class="btn btn-secondary btn-small">
               ← Back
               </button>
@@ -283,77 +294,6 @@
                 Your timeline will appear here.
               </div>
             </div>
-          </div>
-
-          <!-- Accessibility and Theme Settings -->
-          <div class="module settings-module">
-            <h3>Accessibility & Theme</h3>
-            <div class="settings-grid">
-              <label class="control-field" for="themeSelect">
-                <span>Theme</span>
-                <select id="themeSelect">
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
-                </select>
-              </label>
-              <label class="control-field" for="animationIntensityInput">
-                <span>Animation Intensity</span>
-                <input
-                  id="animationIntensityInput"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value="70"
-                />
-              </label>
-              <label class="control-field" for="particleDensityInput">
-                <span>Particle Density</span>
-                <input
-                  id="particleDensityInput"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value="70"
-                />
-              </label>
-              <label class="control-field" for="blurStrengthInput">
-                <span>Blur Strength</span>
-                <input
-                  id="blurStrengthInput"
-                  type="range"
-                  min="0"
-                  max="30"
-                  value="10"
-                />
-              </label>
-              <label class="control-field" for="glowIntensityInput">
-                <span>Glow Intensity</span>
-                <input
-                  id="glowIntensityInput"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value="70"
-                />
-              </label>
-              <label class="control-field" for="fontScaleInput">
-                <span>Font Scale</span>
-                <input
-                  id="fontScaleInput"
-                  type="range"
-                  min="90"
-                  max="125"
-                  value="100"
-                />
-              </label>
-              <label class="toggle-row" for="reducedStimulationToggle">
-                <span>Reduced Stimulation</span>
-                <input id="reducedStimulationToggle" type="checkbox" />
-              </label>
-            </div>
-            <button id="resetPreferencesButton" class="btn btn-secondary btn-small">
-              Reset Preferences
-            </button>
           </div>
 
           <!-- Reflection Journal Section -->

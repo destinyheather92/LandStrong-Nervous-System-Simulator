@@ -22,12 +22,7 @@ const storageKeys = {
 
 const defaultPreferences = {
   theme: "dark",
-  animationIntensity: 70,
-  particleDensity: 70,
-  blurStrength: 10,
-  glowIntensity: 70,
   fontScale: 100,
-  reducedStimulation: false,
   soundEnabled: false,
   natureEnabled: false,
   meditationEnabled: true,
@@ -92,9 +87,9 @@ const AudioContextConstructor = window.AudioContext || window.webkitAudioContext
 const audioContext = AudioContextConstructor
   ? new AudioContextConstructor()
   : null;
-let meditationOscillator = null;
-let meditationGain = null;
-let meditationLfo = null;
+let meditationSound = null;
+let meditationTransitionTimeoutId = null;
+let meditationGeneration = 0;
 let ambientMasterGain = null;
 let natureGain = null;
 let natureSource = null;
@@ -105,13 +100,51 @@ let forestIntervalId = null;
 let guidedMeditationTimeoutId = null;
 let guidedMeditationLineIndex = 0;
 let isGuidedMeditationPlaying = false;
-const meditationFrequencies = {
-  fight: 220,
-  flight: 185,
-  freeze: 145,
-  shutdown: 118,
-  overstimulated: 175,
-  calm: 185,
+// Selected meditation voice for warm, natural speech synthesis
+let selectedMeditationVoice = null;
+const meditationProfiles = {
+  fight: {
+    root: 110,
+    color: 1.6,
+    movement: 0.045,
+    filter: 680,
+    breathRate: 0.055,
+  },
+  flight: {
+    root: 98,
+    color: 1.35,
+    movement: 0.038,
+    filter: 620,
+    breathRate: 0.05,
+  },
+  freeze: {
+    root: 82,
+    color: 1.2,
+    movement: 0.025,
+    filter: 520,
+    breathRate: 0.036,
+  },
+  shutdown: {
+    root: 73,
+    color: 1.1,
+    movement: 0.02,
+    filter: 460,
+    breathRate: 0.032,
+  },
+  overstimulated: {
+    root: 92,
+    color: 1.25,
+    movement: 0.03,
+    filter: 560,
+    breathRate: 0.04,
+  },
+  calm: {
+    root: 88,
+    color: 1.3,
+    movement: 0.028,
+    filter: 600,
+    breathRate: 0.038,
+  },
 };
 
 function savePreferences() {
@@ -153,12 +186,26 @@ function resumeAudioContext() {
   return Promise.resolve(true);
 }
 
+function holdAudioParamAtCurrentValue(audioParam, time) {
+  try {
+    if (typeof audioParam.cancelAndHoldAtTime === "function") {
+      audioParam.cancelAndHoldAtTime(time);
+      return;
+    }
+  } catch (error) {
+    // Some browsers expose the method but do not support every param.
+  }
+
+  const currentValue = audioParam.value;
+  audioParam.cancelScheduledValues(time);
+  audioParam.setValueAtTime(currentValue, time);
+}
+
 function setGainValue(gainNode, value, rampSeconds = 0.25) {
   if (!gainNode || !audioContext) return;
 
   const now = audioContext.currentTime;
-  gainNode.gain.cancelScheduledValues(now);
-  gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+  holdAudioParamAtCurrentValue(gainNode.gain, now);
   gainNode.gain.linearRampToValueAtTime(value, now + rampSeconds);
 }
 
@@ -291,87 +338,304 @@ function updateNatureSound() {
   setGainValue(natureGain, natureLevel);
 }
 
-function stopMeditationSound() {
-  if (meditationOscillator) {
-    meditationOscillator.stop();
-    meditationOscillator.disconnect();
-    meditationOscillator = null;
+function getMeditationProfile(stateKey) {
+  return meditationProfiles[stateKey] || meditationProfiles.calm;
+}
+
+function getMeditationLevel(profile) {
+  if (!userPreferences.soundEnabled || !userPreferences.meditationEnabled) {
+    return 0;
   }
-  if (meditationGain) {
-    meditationGain.disconnect();
-    meditationGain = null;
+
+  return 0.08 * (userPreferences.meditationVolume / 100) * profile.color;
+}
+
+function safeStopAudioNode(node, stopTime) {
+  if (!node || typeof node.stop !== "function") return;
+
+  try {
+    node.stop(stopTime);
+  } catch (error) {
+    // The node may already be stopped after a quick state change.
   }
-  if (meditationLfo) {
-    meditationLfo.stop();
-    meditationLfo.disconnect();
-    meditationLfo = null;
+}
+
+function safeDisconnectAudioNode(node) {
+  if (!node || typeof node.disconnect !== "function") return;
+
+  try {
+    node.disconnect();
+  } catch (error) {
+    // Already disconnected nodes are harmless.
   }
+}
+
+function disconnectMeditationSound(sound) {
+  if (!sound) return;
+
+  sound.oscillators.forEach(safeDisconnectAudioNode);
+  sound.lfos.forEach(safeDisconnectAudioNode);
+  sound.gains.forEach(safeDisconnectAudioNode);
+  sound.filters.forEach(safeDisconnectAudioNode);
+  sound.delayNodes.forEach(safeDisconnectAudioNode);
+  sound.panners.forEach(safeDisconnectAudioNode);
+}
+
+function stopMeditationSound(options = {}) {
+  const { fadeSeconds = 0.65 } = options;
+  meditationGeneration++;
+
+  if (meditationTransitionTimeoutId) {
+    clearTimeout(meditationTransitionTimeoutId);
+    meditationTransitionTimeoutId = null;
+  }
+
+  if (!meditationSound || !audioContext) return;
+
+  const sound = meditationSound;
+  const now = audioContext.currentTime;
+  const stopTime = now + Math.max(fadeSeconds, 0.03);
+
+  meditationSound = null;
+  holdAudioParamAtCurrentValue(sound.outputGain.gain, now);
+  sound.outputGain.gain.linearRampToValueAtTime(0, stopTime);
+
+  sound.oscillators.forEach((oscillator) => {
+    safeStopAudioNode(oscillator, stopTime + 0.05);
+  });
+  sound.lfos.forEach((lfo) => {
+    safeStopAudioNode(lfo, stopTime + 0.05);
+  });
+
+  setTimeout(() => {
+    disconnectMeditationSound(sound);
+  }, (fadeSeconds + 0.2) * 1000);
 }
 
 function playMeditationSound(stateKey) {
   if (!userPreferences.soundEnabled || !userPreferences.meditationEnabled) {
-    stopMeditationSound();
+    stopMeditationSound({ fadeSeconds: 0.45 });
     updateSoundStatus();
     return;
   }
 
-  stopMeditationSound();
+  stopMeditationSound({ fadeSeconds: 0.55 });
+  const requestedGeneration = ++meditationGeneration;
 
   resumeAudioContext().then((isReady) => {
-    if (isReady) {
-      createMeditationSound(stateKey);
+    if (!isReady || requestedGeneration !== meditationGeneration) return;
+
+    meditationTransitionTimeoutId = setTimeout(() => {
+      if (requestedGeneration !== meditationGeneration) return;
+
+      createMeditationSound(stateKey, requestedGeneration);
       updateSoundStatus();
-    }
+    }, 520);
   });
 }
 
-function createMeditationSound(stateKey) {
+function createMeditationVoice(config, profile, sharedNodes) {
+  const oscillator = audioContext.createOscillator();
+  const voiceGain = audioContext.createGain();
+  const frequency = profile.root * config.ratio;
+
+  oscillator.type = config.type;
+  oscillator.frequency.setValueAtTime(
+    frequency * 0.985,
+    audioContext.currentTime,
+  );
+  oscillator.frequency.exponentialRampToValueAtTime(
+    frequency,
+    audioContext.currentTime + 3.5,
+  );
+  oscillator.detune.value = config.detune;
+  voiceGain.gain.value = config.gain;
+
+  oscillator.connect(voiceGain);
+
+  if (audioContext.createStereoPanner) {
+    const panner = audioContext.createStereoPanner();
+    panner.pan.value = config.pan;
+    voiceGain.connect(panner);
+    panner.connect(sharedNodes.filter);
+    sharedNodes.panners.push(panner);
+  } else {
+    voiceGain.connect(sharedNodes.filter);
+  }
+
+  sharedNodes.pitchLfoGain.connect(oscillator.detune);
+  oscillator.start();
+
+  sharedNodes.oscillators.push(oscillator);
+  sharedNodes.gains.push(voiceGain);
+}
+
+function createMeditationSound(stateKey, generation) {
+  if (!audioContext || generation !== meditationGeneration) return;
+
   try {
-    meditationOscillator = audioContext.createOscillator();
-    meditationGain = audioContext.createGain();
-    meditationLfo = audioContext.createOscillator();
-    const lfoGain = audioContext.createGain();
+    const profile = getMeditationProfile(stateKey);
+    const now = audioContext.currentTime;
+    const outputGain = audioContext.createGain();
+    const breathGain = audioContext.createGain();
+    const filter = audioContext.createBiquadFilter();
+    const delay = audioContext.createDelay(4);
+    const delayFeedback = audioContext.createGain();
+    const delayWetGain = audioContext.createGain();
+    const pitchLfo = audioContext.createOscillator();
+    const pitchLfoGain = audioContext.createGain();
+    const breathLfo = audioContext.createOscillator();
+    const breathLfoGain = audioContext.createGain();
+    const filterLfo = audioContext.createOscillator();
+    const filterLfoGain = audioContext.createGain();
 
-    meditationOscillator.type = "sine";
-    meditationOscillator.frequency.value =
-      meditationFrequencies[stateKey] || 180;
-    meditationGain.gain.value = 0;
+    outputGain.gain.value = 0;
+    breathGain.gain.value = 0.86;
+    filter.type = "lowpass";
+    // Warmer, more grounded filter response (reduced Q for less resonance)
+    filter.frequency.setValueAtTime(profile.filter * 0.75, now);
+    filter.frequency.exponentialRampToValueAtTime(profile.filter, now + 4);
+    filter.Q.value = 0.35; // Reduced from 0.45 for softer, less harsh filtering
+    delay.delayTime.value = 1.8;
+    delayFeedback.gain.value = 0.16;
+    delayWetGain.gain.value = 0.05; // Slightly reduced from 0.07 to minimize spacey effect
 
-    meditationOscillator.connect(meditationGain);
-    meditationGain.connect(ambientMasterGain);
+    filter.connect(breathGain);
+    filter.connect(delay);
+    delay.connect(delayFeedback);
+    delayFeedback.connect(delay);
+    delay.connect(delayWetGain);
+    delayWetGain.connect(breathGain);
+    breathGain.connect(outputGain);
+    outputGain.connect(ambientMasterGain);
 
-    meditationLfo.type = "sine";
-    meditationLfo.frequency.value = 0.18;
-    lfoGain.gain.value = 8;
-    meditationLfo.connect(lfoGain);
-    lfoGain.connect(meditationOscillator.frequency);
+    // Pitch LFO: creates subtle pitch variation for warm, organic feel
+    // Reduced from 5 to 1.2 to eliminate sci-fi wobble effect
+    pitchLfo.type = "sine";
+    pitchLfo.frequency.value = profile.movement;
+    pitchLfoGain.gain.value = 1.2; // Significantly reduced for warm, natural tone (was 5)
+    pitchLfo.connect(pitchLfoGain);
 
-    meditationOscillator.start();
-    meditationLfo.start();
+    // Breath LFO: subtle rhythmic variation synced with breathing guidance
+    breathLfo.type = "sine";
+    breathLfo.frequency.value = profile.breathRate;
+    breathLfoGain.gain.value = 0.08;
+    breathLfo.connect(breathLfoGain);
+    breathLfoGain.connect(breathGain.gain);
 
-    const meditationLevel = 0.035 * (userPreferences.meditationVolume / 100);
-    meditationGain.gain.linearRampToValueAtTime(
-      meditationLevel,
-      audioContext.currentTime + 2,
+    // Filter LFO: gentle filter sweep for atmospheric, grounded feel
+    // Reduced from 42 to 8 to minimize harsh electronic modulation
+    filterLfo.type = "sine";
+    filterLfo.frequency.value = profile.movement * 0.7;
+    filterLfoGain.gain.value = 8; // Greatly reduced for warm, soft audio (was 42)
+    filterLfo.connect(filterLfoGain);
+    filterLfoGain.connect(filter.frequency);
+
+    const sound = {
+      stateKey,
+      profile,
+      outputGain,
+      oscillators: [],
+      lfos: [pitchLfo, breathLfo, filterLfo],
+      gains: [
+        outputGain,
+        breathGain,
+        delayFeedback,
+        delayWetGain,
+        pitchLfoGain,
+        breathLfoGain,
+        filterLfoGain,
+      ],
+      filters: [filter],
+      delayNodes: [delay],
+      panners: [],
+      pitchLfoGain,
+      filter,
+    };
+
+    const voiceConfigs = [
+      { ratio: 1, detune: -5, gain: 0.42, type: "sine", pan: -0.28 },
+      { ratio: 1.006, detune: 4, gain: 0.22, type: "sine", pan: 0.28 },
+      { ratio: 1.5, detune: -3, gain: 0.11, type: "sine", pan: 0.06 },
+      { ratio: 2, detune: 2, gain: 0.045, type: "triangle", pan: -0.08 },
+    ];
+
+    voiceConfigs.forEach((config) => {
+      createMeditationVoice(config, profile, sound);
+    });
+
+    sound.lfos.forEach((lfo) => lfo.start());
+    meditationSound = sound;
+    outputGain.gain.linearRampToValueAtTime(
+      getMeditationLevel(profile),
+      now + 4.5,
     );
   } catch (error) {
     console.log("Audio not available:", error);
+    stopMeditationSound({ fadeSeconds: 0.05 });
   }
 }
 
 function updateMeditationVolume() {
-  if (!meditationGain) return;
+  if (!meditationSound) return;
 
-  const meditationLevel =
-    userPreferences.soundEnabled && userPreferences.meditationEnabled
-      ? 0.035 * (userPreferences.meditationVolume / 100)
-      : 0;
+  setGainValue(
+    meditationSound.outputGain,
+    getMeditationLevel(meditationSound.profile),
+    1.5,
+  );
+}
 
-  setGainValue(meditationGain, meditationLevel);
+// ============================================================
+// GUIDED MEDITATION VOICE SELECTION & SPEECH SYNTHESIS
+// ============================================================
+
+/**
+ * Intelligently selects the best available meditation voice for warm, natural delivery.
+ * Prioritizes soft, natural-sounding female neural voices that reduce robotic speech.
+ * Falls back gracefully if preferred voices are unavailable.
+ */
+function selectMeditationVoice() {
+  if (!supportsGuidedMeditation()) return null;
+
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+
+  // Priority list: soft, natural-sounding female neural voices
+  const preferredVoicePatterns = [
+    /google.*female.*neural/i,
+    /google.*uk.*english.*female/i,
+    /microsoft.*aria/i,
+    /microsoft.*jenny/i,
+    /samantha/i,
+    /aurora/i,
+    /nova/i,
+    /google.*english.*female/i,
+    /female/i,
+  ];
+
+  // Try to find a voice matching preferred patterns
+  for (const pattern of preferredVoicePatterns) {
+    const voice = voices.find((v) => pattern.test(v.name) || pattern.test(v.voiceURI));
+    if (voice) return voice;
+  }
+
+  // Fallback: prefer female voices, then any available voice
+  const femaleVoice = voices.find((v) => v.name.toLowerCase().includes("female"));
+  return femaleVoice || voices[0];
 }
 
 function supportsGuidedMeditation() {
   return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+// Preload meditation voice once on startup
+if (supportsGuidedMeditation()) {
+  // Voices may not be ready immediately; update when available
+  window.speechSynthesis.onvoiceschanged = () => {
+    selectedMeditationVoice = selectMeditationVoice();
+  };
+  selectedMeditationVoice = selectMeditationVoice();
 }
 
 function getGuidedMeditationStateKey() {
@@ -412,6 +676,11 @@ function stopGuidedMeditation(message = "Guided voice is paused.") {
   }
 }
 
+/**
+ * Speaks a guided meditation line with optimized speech parameters for natural delivery.
+ * Uses slower rate, softer pitch, and warm volume settings to reduce robotic speech.
+ * Includes intelligent pause timing based on line complexity.
+ */
 function speakGuidedMeditationLine(stateKey) {
   if (!isGuidedMeditationPlaying) return;
 
@@ -428,11 +697,18 @@ function speakGuidedMeditationLine(stateKey) {
     (userPreferences.masterVolume / 100) *
     (userPreferences.meditationVolume / 100);
 
-  utterance.volume = Math.max(0, Math.min(voiceVolume, 1));
-  utterance.rate = ["freeze", "shutdown", "calm"].includes(stateKey)
-    ? 0.82
-    : 0.9;
-  utterance.pitch = stateKey === "fight" ? 0.92 : 0.98;
+  // Apply selected meditation voice for warm, natural delivery
+  if (selectedMeditationVoice) {
+    utterance.voice = selectedMeditationVoice;
+  }
+
+  // Optimized speech parameters for warm, human-like meditation guidance:
+  // - Slower rate (0.70-0.75) for relaxed, natural pacing
+  // - Softer pitch (0.85-0.92) for warmer, less robotic tone
+  // - Reduced volume (0.80-0.90) for intimate, calming presence
+  utterance.rate = 0.72; // Significantly slower than default (1.0) for meditative pacing
+  utterance.pitch = 0.88; // Slightly lower for warmer, more calming tone
+  utterance.volume = Math.max(0, Math.min(voiceVolume * 0.9, 0.9)); // Softer, more intimate delivery
 
   if (guidedMeditationText) {
     guidedMeditationText.textContent = line;
@@ -440,9 +716,14 @@ function speakGuidedMeditationLine(stateKey) {
 
   utterance.onend = () => {
     guidedMeditationLineIndex++;
+
+    // Calculate pause duration based on line complexity
+    // Longer pauses (3500ms) give users time to breathe and absorb guidance
+    // instead of rushing through the meditation
+    const pauseDuration = calculateMeditationPauseDuration(line);
     guidedMeditationTimeoutId = setTimeout(() => {
       speakGuidedMeditationLine(stateKey);
-    }, 1800);
+    }, pauseDuration);
   };
 
   utterance.onerror = () => {
@@ -452,6 +733,23 @@ function speakGuidedMeditationLine(stateKey) {
   window.speechSynthesis.speak(utterance);
 }
 
+/**
+ * Calculates natural pause duration between meditation lines.
+ * Longer pauses allow users to integrate guidance and breathe.
+ * Adjusts based on text length for smoother flow.
+ */
+function calculateMeditationPauseDuration(text) {
+  // Base pause: 3500ms provides spacious, breathing-room timing
+  // Roughly 100 characters adds 500ms to allow more time with longer guidance
+  const baseMs = 3500;
+  const extraMs = Math.floor(text.length / 100) * 500;
+  return baseMs + Math.min(extraMs, 1500); // Cap extra pause at 1500ms
+}
+
+/**
+ * Starts guided meditation with intelligent voice selection and warm speech parameters.
+ * Ensures best available meditation voice is loaded for natural, calming delivery.
+ */
 function startGuidedMeditation(stateKey = getGuidedMeditationStateKey()) {
   if (!supportsGuidedMeditation()) {
     if (guidedMeditationText) {
@@ -470,6 +768,9 @@ function startGuidedMeditation(stateKey = getGuidedMeditationStateKey()) {
     savePreferences();
     applyPreferences({ refreshParticles: false, updateAudio: true });
   }
+
+  // Refresh voice selection to ensure best available voice is active
+  selectedMeditationVoice = selectMeditationVoice();
 
   window.speechSynthesis.cancel();
   guidedMeditationLineIndex = 0;
@@ -518,7 +819,10 @@ function updateSoundscape() {
 
     if (!userPreferences.meditationEnabled) {
       stopMeditationSound();
-    } else if (appState.selectedEmotion && !meditationOscillator) {
+    } else if (
+      appState.selectedEmotion &&
+      (!meditationSound || meditationSound.stateKey !== appState.selectedEmotion)
+    ) {
       playMeditationSound(appState.selectedEmotion);
     } else {
       updateMeditationVolume();
@@ -837,42 +1141,44 @@ const affirmationsByState = {
   ],
 };
 
+// Guided meditation lines optimized for natural speech synthesis
+// Enhanced with ellipses, pauses, and softer wording for warm, human-like delivery
 const guidedMeditationsByState = {
   fight: [
-    "Let your jaw soften. Let your shoulders drop by one small degree.",
-    "Inhale steadily. Hold for a moment. Exhale longer than you think you need.",
-    "Notice the strength in your body without letting it take over the room.",
-    "Feel your feet beneath you. You are here, and you have options.",
+    "Let your jaw soften... let it become heavy and relaxed.",
+    "Feel your shoulders drop... one slow, gentle degree at a time.",
+    "Breathe in steadily through your nose... and exhale longer than you think you need.",
+    "Notice the strength in your body... without letting it take over the room.",
   ],
   flight: [
-    "Let your eyes settle on one steady point.",
-    "Inhale for four. Hold for four. Exhale for four.",
-    "You do not have to leave this moment to be safe.",
-    "Let each breath make the next moment more predictable.",
+    "Let your eyes settle on something steady... something that doesn't move.",
+    "Inhale for four... hold for four... exhale for four.",
+    "You don't have to leave this moment... you can stay here and be safe.",
+    "Let each breath make the next moment feel more... predictable.",
   ],
   freeze: [
-    "Begin gently. Notice the air touching your nose or lips.",
-    "Inhale softly. Pause only if it feels kind. Exhale without force.",
-    "Wiggle one finger or one toe if that feels available.",
-    "You can return slowly. Small signals count.",
+    "Begin very gently... notice the air touching your nose or your lips.",
+    "Inhale softly... pause only if it feels kind... exhale without any force.",
+    "If it feels available... wiggle one finger... or one toe... slowly.",
+    "You can return to your body at your own pace... there's no rush.",
   ],
   shutdown: [
-    "Let this practice be very simple.",
-    "Inhale as if you are opening a small window. Pause. Exhale evenly.",
-    "You do not need a big shift. One breath is enough for now.",
-    "Let your attention come back to one small place of contact.",
+    "Let this practice be very simple... just breathing, nothing more.",
+    "Inhale as if you're opening a small window in your chest... then pause... then exhale.",
+    "You don't need a big shift right now... one breath is enough.",
+    "Let your attention drift to one small place... where you feel safe and held.",
   ],
   overstimulated: [
-    "Let the field narrow. One sound, one breath, one moment.",
-    "Inhale simply. Pause briefly. Exhale longer and let the edges soften.",
-    "You do not have to process everything at once.",
-    "Let repetition become a quiet container around you.",
+    "Let the world narrow... focus on one sound... one breath... one moment.",
+    "Breathe in simply... pause... and exhale longer... letting the edges soften.",
+    "You don't have to process everything at once... it can all wait.",
+    "Let the repetition of your breath become a quiet... container around you.",
   ],
   calm: [
-    "Notice what already feels steady.",
-    "Inhale slowly. Hold gently. Exhale as if you are making more room.",
-    "Let the calm become familiar without needing to hold it tightly.",
-    "Rest here for one more breath.",
+    "Notice what already feels steady... what already feels at rest.",
+    "Inhale slowly... hold the breath gently... exhale as if you're making more room.",
+    "Let the calm become familiar... without needing to hold it or push it away.",
+    "Rest here... in this moment... for one more breath... and then another.",
   ],
 };
 
@@ -925,27 +1231,79 @@ const journalCountStat = document.getElementById("journalCountStat");
 const visitCountStat = document.getElementById("visitCountStat");
 const dominantStateStat = document.getElementById("dominantStateStat");
 const emotionTimeline = document.getElementById("emotionTimeline");
-const themeSelect = document.getElementById("themeSelect");
-const animationIntensityInput = document.getElementById(
-  "animationIntensityInput",
-);
-const particleDensityInput = document.getElementById("particleDensityInput");
-const blurStrengthInput = document.getElementById("blurStrengthInput");
-const glowIntensityInput = document.getElementById("glowIntensityInput");
 const fontScaleInput = document.getElementById("fontScaleInput");
-const reducedStimulationToggle = document.getElementById(
-  "reducedStimulationToggle",
-);
-const resetPreferencesButton = document.getElementById("resetPreferencesButton");
 
 let breathingIntervalId = null;
 let breathingAnimationFrameId = null;
+let fontScaleObserver = null;
+let fontScaleFrameId = null;
 
 const defaultBreathingOrbScales = {
   inhaleStart: 1,
   inhaleEnd: 1.32,
 };
 let activeBreathingOrbScales = { ...defaultBreathingOrbScales };
+
+// ============================================================
+// FONT ACCESSIBILITY
+// ============================================================
+
+function elementHasReadableText(element) {
+  const textInputTypes = ["BUTTON", "INPUT", "SELECT", "TEXTAREA", "OPTION"];
+
+  if (textInputTypes.includes(element.tagName)) {
+    return true;
+  }
+
+  return Array.from(element.childNodes).some(
+    (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
+  );
+}
+
+function applyFontScaleToPage() {
+  const scale = userPreferences.fontScale / 100;
+  const elements = Array.from(document.body.querySelectorAll("*")).filter(
+    elementHasReadableText,
+  );
+  const measurements = elements.map((element) => {
+    const baseSize =
+      element.dataset.baseFontSize ||
+      window.getComputedStyle(element).fontSize.replace("px", "");
+
+    return {
+      element,
+      baseSize: Number(baseSize),
+    };
+  });
+
+  measurements.forEach(({ element, baseSize }) => {
+    if (!Number.isFinite(baseSize)) return;
+
+    element.dataset.baseFontSize = String(baseSize);
+    element.style.fontSize = `${(baseSize * scale).toFixed(2)}px`;
+  });
+}
+
+function scheduleFontScaleRefresh() {
+  if (fontScaleFrameId) {
+    cancelAnimationFrame(fontScaleFrameId);
+  }
+
+  fontScaleFrameId = requestAnimationFrame(() => {
+    fontScaleFrameId = null;
+    applyFontScaleToPage();
+  });
+}
+
+function setupFontScaleObserver() {
+  if (fontScaleObserver) return;
+
+  fontScaleObserver = new MutationObserver(scheduleFontScaleRefresh);
+  fontScaleObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
 
 // ============================================================
 // PARTICLES SYSTEM
@@ -964,12 +1322,7 @@ function createParticles(containerId, count, preferredSpeed = null) {
   // Clear existing particles
   container.innerHTML = "";
 
-  const particleDensity = userPreferences.reducedStimulation
-    ? 0
-    : userPreferences.particleDensity / 100;
-  const adjustedCount = Math.round(count * particleDensity);
-
-  for (let i = 0; i < adjustedCount; i++) {
+  for (let i = 0; i < count; i++) {
     const particle = document.createElement("div");
     particle.className = "particle";
 
@@ -1773,32 +2126,11 @@ function applyPreferences(options = {}) {
     userPreferences.theme === "light",
   );
   document.body.classList.toggle("theme-dark", userPreferences.theme === "dark");
-  document.body.classList.toggle(
-    "reduced-stimulation",
-    userPreferences.reducedStimulation,
-  );
-  document.body.classList.toggle(
-    "motion-minimal",
-    userPreferences.animationIntensity <= 25,
-  );
-  document.body.classList.toggle(
-    "motion-soft",
-    userPreferences.animationIntensity > 25 &&
-      userPreferences.animationIntensity <= 60,
-  );
-
-  document.documentElement.style.setProperty(
-    "--accessibility-blur",
-    `${userPreferences.blurStrength}px`,
-  );
-  document.documentElement.style.setProperty(
-    "--glow-intensity",
-    (userPreferences.glowIntensity / 100).toFixed(2),
-  );
   document.documentElement.style.setProperty(
     "--font-scale",
     (userPreferences.fontScale / 100).toFixed(2),
   );
+  scheduleFontScaleRefresh();
 
   syncPreferenceControls();
   if (refreshParticles) refreshParticlesForCurrentSection();
@@ -1806,7 +2138,6 @@ function applyPreferences(options = {}) {
 }
 
 function syncPreferenceControls() {
-  if (themeSelect) themeSelect.value = userPreferences.theme;
   if (themeToggleButton) {
     const isLight = userPreferences.theme === "light";
     themeToggleButton.textContent = isLight ? "Dark Mode" : "Light Mode";
@@ -1827,20 +2158,7 @@ function syncPreferenceControls() {
   if (meditationVolumeInput) {
     meditationVolumeInput.value = userPreferences.meditationVolume;
   }
-  if (animationIntensityInput) {
-    animationIntensityInput.value = userPreferences.animationIntensity;
-  }
-  if (particleDensityInput) {
-    particleDensityInput.value = userPreferences.particleDensity;
-  }
-  if (blurStrengthInput) blurStrengthInput.value = userPreferences.blurStrength;
-  if (glowIntensityInput) {
-    glowIntensityInput.value = userPreferences.glowIntensity;
-  }
   if (fontScaleInput) fontScaleInput.value = userPreferences.fontScale;
-  if (reducedStimulationToggle) {
-    reducedStimulationToggle.checked = userPreferences.reducedStimulation;
-  }
 }
 
 function updatePreference(key, value) {
@@ -1855,7 +2173,6 @@ function updatePreference(key, value) {
   userPreferences[key] = value;
   savePreferences();
 
-  const particleKeys = ["particleDensity", "reducedStimulation"];
   const soundKeys = [
     "soundEnabled",
     "natureEnabled",
@@ -1868,7 +2185,7 @@ function updatePreference(key, value) {
   ];
 
   applyPreferences({
-    refreshParticles: particleKeys.includes(key),
+    refreshParticles: false,
     updateAudio: soundKeys.includes(key),
   });
 }
@@ -1880,12 +2197,6 @@ function bindWellnessControls() {
         "theme",
         userPreferences.theme === "light" ? "dark" : "light",
       );
-    });
-  }
-
-  if (themeSelect) {
-    themeSelect.addEventListener("change", (event) => {
-      updatePreference("theme", event.target.value);
     });
   }
 
@@ -1927,10 +2238,6 @@ function bindWellnessControls() {
     ["masterVolume", masterVolumeInput],
     ["natureVolume", natureVolumeInput],
     ["meditationVolume", meditationVolumeInput],
-    ["animationIntensity", animationIntensityInput],
-    ["particleDensity", particleDensityInput],
-    ["blurStrength", blurStrengthInput],
-    ["glowIntensity", glowIntensityInput],
     ["fontScale", fontScaleInput],
   ].forEach(([preferenceKey, input]) => {
     if (!input) return;
@@ -1939,12 +2246,6 @@ function bindWellnessControls() {
       updatePreference(preferenceKey, Number(event.target.value));
     });
   });
-
-  if (reducedStimulationToggle) {
-    reducedStimulationToggle.addEventListener("change", (event) => {
-      updatePreference("reducedStimulation", event.target.checked);
-    });
-  }
 
   if (newAffirmationButton) {
     newAffirmationButton.addEventListener("click", () => {
@@ -1956,15 +2257,6 @@ function bindWellnessControls() {
     refreshRoutineButton.addEventListener("click", renderPersonalRoutine);
   }
 
-  if (resetPreferencesButton) {
-    resetPreferencesButton.addEventListener("click", () => {
-      userPreferences = { ...defaultPreferences };
-      savePreferences();
-      stopNatureSound();
-      stopMeditationSound();
-      applyPreferences();
-    });
-  }
 }
 
 // ============================================================
@@ -2086,7 +2378,7 @@ beginButton.addEventListener("click", () => {
  */
 backButton.addEventListener("click", () => {
   stopBreathingExercise();
-  stopMeditationSound();
+  stopMeditationSound({ fadeSeconds: 0.4 });
   stopGuidedMeditation("Guided voice will follow the selected state.");
   updateSoundStatus();
   breathingText.textContent = "Get ready...";
@@ -2104,8 +2396,9 @@ resetButton.addEventListener("click", () => {
   breathingCount.textContent = "";
   journalInput.value = "";
   charCount.textContent = "0";
-  stopMeditationSound();
+  stopMeditationSound({ fadeSeconds: 0.35 });
   stopGuidedMeditation("Guided voice will follow the selected state.");
+  updateSoundStatus();
   transitionToSection("hero");
 });
 
@@ -2119,6 +2412,7 @@ resetButton.addEventListener("click", () => {
 function initializeApp() {
   applyPreferences({ refreshParticles: false, updateAudio: false });
   bindWellnessControls();
+  setupFontScaleObserver();
   trackAppVisit();
 
   // Show hero section
@@ -2140,6 +2434,7 @@ function initializeApp() {
     showAffirmation("calm");
   }
   updateSoundStatus();
+  scheduleFontScaleRefresh();
 
   // Log initialization
   console.log("LandStrong Nervous System Simulator initialized");

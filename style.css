@@ -180,7 +180,7 @@ body {
   font-family: var(--font-primary);
   background-color: var(--page-background);
   color: var(--text-primary);
-  font-size: calc(16px * var(--font-scale));
+  font-size: 16px;
   background-image:
     linear-gradient(to right, var(--grid-line-color) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid-line-color) 1px, transparent 1px);
@@ -303,6 +303,7 @@ section.hidden {
   position: relative;
   overflow: hidden;
   pointer-events: auto;
+  margin-top: 10px;
 }
 
 .btn:hover {
@@ -1366,7 +1367,7 @@ button:disabled {
 }
 
 /* ============================================================
-   WELLNESS TOOLS, DASHBOARD & SETTINGS
+   WELLNESS TOOLS & DASHBOARD
    ============================================================ */
 
 .header-actions {
@@ -1375,6 +1376,35 @@ button:disabled {
   justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.header-actions .btn {
+  width: auto;
+}
+
+.header-font-control {
+  display: grid;
+  grid-template-columns: auto minmax(96px, 130px);
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel-background);
+  color: var(--text-muted);
+  backdrop-filter: blur(var(--accessibility-blur));
+}
+
+.header-font-control span {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.header-font-control input {
+  width: 100%;
+  accent-color: var(--color-calm-blue);
 }
 
 .module,
@@ -1434,15 +1464,9 @@ button:disabled {
   grid-row: span 2;
 }
 
-.sound-controls,
-.settings-grid {
+.sound-controls {
   display: grid;
   gap: 16px;
-}
-
-.settings-grid {
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  margin-bottom: 22px;
 }
 
 .toggle-row,
@@ -1667,10 +1691,6 @@ body.theme-light .control-field select option {
   font-weight: var(--font-weight-light);
 }
 
-.settings-module {
-  margin-bottom: 60px;
-}
-
 body.theme-light .module,
 body.theme-light .journal-section,
 body.theme-light .emotion-card {
@@ -1685,54 +1705,6 @@ body.theme-light .journal-textarea,
 body.theme-light .grounding-item,
 body.theme-light .reflection-card {
   background: rgba(255, 255, 255, 0.48);
-}
-
-body.motion-soft .blob,
-body.motion-soft .float-element,
-body.motion-soft .breathing-orb {
-  animation-duration: 45s !important;
-}
-
-body.motion-soft .particle {
-  animation-duration: 34s !important;
-}
-
-body.motion-minimal .blob,
-body.motion-minimal .float-element,
-body.motion-minimal .particle,
-body.motion-minimal .breathing-orb {
-  animation-duration: 90s !important;
-}
-
-body.motion-minimal .emotion-card:hover,
-body.motion-minimal .grounding-item:hover,
-body.motion-minimal .reflection-card:hover,
-body.motion-minimal .btn:hover {
-  transform: none;
-}
-
-body.reduced-stimulation .blob,
-body.reduced-stimulation .particle,
-body.reduced-stimulation .floating-text,
-body.reduced-stimulation .grain-overlay,
-body.reduced-stimulation .custom-cursor,
-body.reduced-stimulation .cursor-follower {
-  display: none !important;
-}
-
-body.reduced-stimulation *,
-body.reduced-stimulation *::before,
-body.reduced-stimulation *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
-}
-
-body.reduced-stimulation .module,
-body.reduced-stimulation .journal-section,
-body.reduced-stimulation .emotion-card,
-body.reduced-stimulation .btn-secondary {
-  backdrop-filter: none;
 }
 
 /* ============================================================
@@ -1845,6 +1817,13 @@ body.reduced-stimulation .btn-secondary {
   animation-duration: 30s;
 }
 
+/* Keep the breathing anchor visually grounded. JavaScript still controls the
+   gentle inhale/exhale scale, but the orb no longer drifts or bounces. */
+.regulation-section .breathing-orb,
+.regulation-section .breathing-orb.breathing {
+  animation: none !important;
+}
+
 /* ============================================================
    RESPONSIVE DESIGN
    ============================================================ */
@@ -1883,6 +1862,11 @@ body.reduced-stimulation .btn-secondary {
 
   .header-actions {
     width: 100%;
+  }
+
+  .header-actions .btn,
+  .header-font-control {
+    flex: 1 1 160px;
   }
 
   .action-buttons {
