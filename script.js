@@ -100,10 +100,19 @@ let natureSource = null;
 let natureFilter = null;
 let natureLfo = null;
 let natureLfoGain = null;
+let natureStopTimeoutId = null;
+let activeNatureType = null;
 let forestIntervalId = null;
 let guidedMeditationTimeoutId = null;
 let guidedMeditationLineIndex = 0;
 let isGuidedMeditationPlaying = false;
+const audioLifecycle = {
+  activeStateKey: null,
+  syncToken: 0,
+  fadeInSeconds: 0.8,
+  fadeOutSeconds: 0.45,
+  quickFadeSeconds: 0.18,
+};
 // Selected meditation voice for warm, natural speech synthesis
 let selectedMeditationVoice = null;
 const meditationProfiles = {
@@ -184,7 +193,10 @@ function resumeAudioContext() {
   if (!ensureAudioGraph()) return Promise.resolve(false);
 
   if (audioContext.state === "suspended") {
-    return audioContext.resume().then(() => true);
+    return audioContext
+      .resume()
+      .then(() => true)
+      .catch(() => false);
   }
 
   return Promise.resolve(true);
@@ -213,6 +225,34 @@ function setGainValue(gainNode, value, rampSeconds = 0.25) {
   gainNode.gain.linearRampToValueAtTime(value, now + rampSeconds);
 }
 
+function getActiveAudioStateKey() {
+  if (document.hidden || appState.currentSection !== "regulation") {
+    return null;
+  }
+
+  if (!appState.selectedEmotion || !emotionalStates[appState.selectedEmotion]) {
+    return null;
+  }
+
+  return appState.selectedEmotion;
+}
+
+function isAudioForActiveState(stateKey) {
+  return Boolean(stateKey && getActiveAudioStateKey() === stateKey);
+}
+
+function nextAudioSyncToken() {
+  audioLifecycle.syncToken += 1;
+  return audioLifecycle.syncToken;
+}
+
+function isCurrentAudioSync(syncToken, stateKey) {
+  return (
+    syncToken === audioLifecycle.syncToken &&
+    isAudioForActiveState(stateKey)
+  );
+}
+
 function createNoiseBuffer() {
   const bufferLength = audioContext.sampleRate * 2;
   const buffer = audioContext.createBuffer(
@@ -229,33 +269,75 @@ function createNoiseBuffer() {
   return buffer;
 }
 
-function stopNatureSound() {
-  if (natureSource) {
-    natureSource.stop();
-    natureSource.disconnect();
-    natureSource = null;
+function clearNatureStopTimeout() {
+  if (natureStopTimeoutId) {
+    clearTimeout(natureStopTimeoutId);
+    natureStopTimeoutId = null;
   }
+}
 
-  if (natureFilter) {
-    natureFilter.disconnect();
-    natureFilter = null;
-  }
-
-  if (natureLfo) {
-    natureLfo.stop();
-    natureLfo.disconnect();
-    natureLfo = null;
-  }
-
-  if (natureLfoGain) {
-    natureLfoGain.disconnect();
-    natureLfoGain = null;
-  }
-
+function stopForestChimeLoop() {
   if (forestIntervalId) {
     clearInterval(forestIntervalId);
     forestIntervalId = null;
   }
+}
+
+function disconnectNatureSound() {
+  if (natureSource) {
+    safeStopAudioNode(natureSource);
+    safeDisconnectAudioNode(natureSource);
+    natureSource = null;
+  }
+
+  if (natureFilter) {
+    safeDisconnectAudioNode(natureFilter);
+    natureFilter = null;
+  }
+
+  if (natureLfo) {
+    safeStopAudioNode(natureLfo);
+    safeDisconnectAudioNode(natureLfo);
+    natureLfo = null;
+  }
+
+  if (natureLfoGain) {
+    safeDisconnectAudioNode(natureLfoGain);
+    natureLfoGain = null;
+  }
+
+  activeNatureType = null;
+}
+
+function stopNatureSound(options = {}) {
+  const {
+    fadeSeconds = audioLifecycle.fadeOutSeconds,
+    force = false,
+  } = options;
+
+  clearNatureStopTimeout();
+  stopForestChimeLoop();
+
+  if (!natureSource && !natureFilter && !natureLfo && !natureLfoGain) {
+    if (natureGain) setGainValue(natureGain, 0, 0.1);
+    activeNatureType = null;
+    return;
+  }
+
+  if (force || !audioContext || !natureGain || fadeSeconds <= 0.05) {
+    if (natureGain) setGainValue(natureGain, 0, 0.05);
+    disconnectNatureSound();
+    return;
+  }
+
+  setGainValue(natureGain, 0, fadeSeconds);
+  natureStopTimeoutId = setTimeout(
+    () => {
+      natureStopTimeoutId = null;
+      disconnectNatureSound();
+    },
+    (fadeSeconds + 0.15) * 1000,
+  );
 }
 
 function configureNatureTexture() {
@@ -325,6 +407,7 @@ function configureNatureTexture() {
 
 function playForestChime() {
   if (
+    !getActiveAudioStateKey() ||
     !userPreferences.soundEnabled ||
     !userPreferences.natureEnabled ||
     userPreferences.natureType !== "forest"
@@ -354,7 +437,9 @@ function playForestChime() {
 function startNatureSound() {
   if (!ensureAudioGraph()) return;
 
-  stopNatureSound();
+  clearNatureStopTimeout();
+  stopForestChimeLoop();
+  disconnectNatureSound();
   configureNatureTexture();
 
   natureSource = audioContext.createBufferSource();
@@ -363,21 +448,32 @@ function startNatureSound() {
   natureSource.connect(natureFilter);
   natureFilter.connect(natureGain);
   natureSource.start();
+  activeNatureType = userPreferences.natureType;
 }
 
-function updateNatureSound() {
-  if (!userPreferences.soundEnabled || !userPreferences.natureEnabled) {
-    setGainValue(natureGain, 0);
-    stopNatureSound();
+function updateNatureSound(options = {}) {
+  const {
+    fadeInSeconds = audioLifecycle.fadeInSeconds,
+    fadeOutSeconds = audioLifecycle.fadeOutSeconds,
+  } = options;
+
+  if (
+    !getActiveAudioStateKey() ||
+    !userPreferences.soundEnabled ||
+    !userPreferences.natureEnabled
+  ) {
+    stopNatureSound({ fadeSeconds: fadeOutSeconds });
     return;
   }
 
-  if (!natureSource) {
+  clearNatureStopTimeout();
+
+  if (!natureSource || activeNatureType !== userPreferences.natureType) {
     startNatureSound();
   }
 
   const natureLevel = 0.16 * (userPreferences.natureVolume / 100);
-  setGainValue(natureGain, natureLevel);
+  setGainValue(natureGain, natureLevel, fadeInSeconds);
 }
 
 function getMeditationProfile(stateKey) {
@@ -458,24 +554,44 @@ function stopMeditationSound(options = {}) {
 }
 
 function playMeditationSound(stateKey) {
+  if (!isAudioForActiveState(stateKey)) {
+    stopMeditationSound({ fadeSeconds: audioLifecycle.quickFadeSeconds });
+    updateSoundStatus();
+    return;
+  }
+
   if (!userPreferences.soundEnabled || !userPreferences.meditationEnabled) {
     stopMeditationSound({ fadeSeconds: 0.45 });
     updateSoundStatus();
     return;
   }
 
-  stopMeditationSound({ fadeSeconds: 0.55 });
+  const transitionFadeSeconds = 0.55;
+  const syncToken = audioLifecycle.syncToken;
+
+  stopMeditationSound({ fadeSeconds: transitionFadeSeconds });
   const requestedGeneration = ++meditationGeneration;
 
   resumeAudioContext().then((isReady) => {
-    if (!isReady || requestedGeneration !== meditationGeneration) return;
+    if (
+      !isReady ||
+      requestedGeneration !== meditationGeneration ||
+      !isCurrentAudioSync(syncToken, stateKey)
+    ) {
+      return;
+    }
 
     meditationTransitionTimeoutId = setTimeout(() => {
-      if (requestedGeneration !== meditationGeneration) return;
+      if (
+        requestedGeneration !== meditationGeneration ||
+        !isCurrentAudioSync(syncToken, stateKey)
+      ) {
+        return;
+      }
 
       createMeditationSound(stateKey, requestedGeneration);
       updateSoundStatus();
-    }, 520);
+    }, (transitionFadeSeconds + 0.08) * 1000);
   });
 }
 
@@ -516,7 +632,13 @@ function createMeditationVoice(config, profile, sharedNodes) {
 }
 
 function createMeditationSound(stateKey, generation) {
-  if (!audioContext || generation !== meditationGeneration) return;
+  if (
+    !audioContext ||
+    generation !== meditationGeneration ||
+    !isAudioForActiveState(stateKey)
+  ) {
+    return;
+  }
 
   try {
     const profile = getMeditationProfile(stateKey);
@@ -623,6 +745,11 @@ function createMeditationSound(stateKey, generation) {
 
 function updateMeditationVolume() {
   if (!meditationSound) return;
+
+  if (!isAudioForActiveState(meditationSound.stateKey)) {
+    stopMeditationSound({ fadeSeconds: audioLifecycle.quickFadeSeconds });
+    return;
+  }
 
   setGainValue(
     meditationSound.outputGain,
@@ -829,6 +956,11 @@ function stopGuidedMeditation(message = "Guided voice is paused.") {
 function speakGuidedMeditationLine(stateKey) {
   if (!isGuidedMeditationPlaying) return;
 
+  if (!isAudioForActiveState(stateKey)) {
+    stopGuidedMeditation("Guided voice will follow the selected state.");
+    return;
+  }
+
   const lines = getGuidedMeditationLines(stateKey);
 
   if (guidedMeditationLineIndex >= lines.length) {
@@ -865,6 +997,10 @@ function speakGuidedMeditationLine(stateKey) {
   }
 
   utterance.onend = () => {
+    if (!isGuidedMeditationPlaying || !isAudioForActiveState(stateKey)) {
+      return;
+    }
+
     guidedMeditationLineIndex++;
 
     // Calculate pause duration based on line complexity
@@ -901,6 +1037,16 @@ function calculateMeditationPauseDuration(text) {
  * Ensures best available meditation voice is loaded for natural, calming delivery.
  */
 function startGuidedMeditation(stateKey = getGuidedMeditationStateKey()) {
+  const activeStateKey = getActiveAudioStateKey();
+
+  if (!activeStateKey) {
+    stopGuidedMeditation("Guided voice will follow the selected state.");
+    updateSoundStatus();
+    return;
+  }
+
+  stateKey = activeStateKey;
+
   if (!supportsGuidedMeditation()) {
     if (guidedMeditationText) {
       guidedMeditationText.textContent =
@@ -937,7 +1083,50 @@ function toggleGuidedMeditation() {
   }
 }
 
-function updateSoundscape() {
+function stopActiveSoundscape(options = {}) {
+  const {
+    fadeSeconds = audioLifecycle.fadeOutSeconds,
+    force = false,
+    guidedMessage = "Guided voice will follow the selected state.",
+    updateStatus = true,
+  } = options;
+  const appliedFadeSeconds = force
+    ? Math.min(fadeSeconds, audioLifecycle.quickFadeSeconds)
+    : fadeSeconds;
+
+  nextAudioSyncToken();
+  audioLifecycle.activeStateKey = null;
+
+  if (ambientMasterGain && audioContext) {
+    setGainValue(ambientMasterGain, 0, Math.max(appliedFadeSeconds, 0.05));
+  }
+
+  stopNatureSound({ fadeSeconds: appliedFadeSeconds, force });
+  stopMeditationSound({ fadeSeconds: appliedFadeSeconds });
+  stopGuidedMeditation(guidedMessage);
+
+  if (updateStatus) updateSoundStatus();
+}
+
+function updateSoundscape(options = {}) {
+  const {
+    fadeInSeconds = audioLifecycle.fadeInSeconds,
+    fadeOutSeconds = audioLifecycle.fadeOutSeconds,
+    inactiveMessage = "Guided voice will follow the selected state.",
+  } = options;
+  const activeStateKey = getActiveAudioStateKey();
+
+  if (!activeStateKey) {
+    stopActiveSoundscape({
+      fadeSeconds: fadeOutSeconds,
+      guidedMessage: inactiveMessage,
+    });
+    return;
+  }
+
+  const syncToken = nextAudioSyncToken();
+  audioLifecycle.activeStateKey = activeStateKey;
+
   if (!ensureAudioGraph()) {
     if (soundStatus) {
       soundStatus.textContent =
@@ -948,33 +1137,37 @@ function updateSoundscape() {
     return;
   }
 
-  setGainValue(ambientMasterGain, userPreferences.masterVolume / 100);
-
   if (!userPreferences.soundEnabled) {
-    setGainValue(ambientMasterGain, 0);
-    stopNatureSound();
-    stopMeditationSound();
+    setGainValue(ambientMasterGain, 0, fadeOutSeconds);
+    stopNatureSound({ fadeSeconds: fadeOutSeconds });
+    stopMeditationSound({ fadeSeconds: fadeOutSeconds });
     stopGuidedMeditation("Sound is off. Guided voice is paused.");
     updateSoundStatus();
     return;
   }
 
-  resumeAudioContext().then(() => {
-    setGainValue(ambientMasterGain, userPreferences.masterVolume / 100);
-    updateNatureSound();
+  resumeAudioContext().then((isReady) => {
+    if (!isReady || !isCurrentAudioSync(syncToken, activeStateKey)) return;
+
+    setGainValue(
+      ambientMasterGain,
+      userPreferences.masterVolume / 100,
+      fadeInSeconds,
+    );
+    updateNatureSound({ fadeInSeconds, fadeOutSeconds });
 
     if (!userPreferences.guidedMeditationEnabled && isGuidedMeditationPlaying) {
       stopGuidedMeditation();
     }
 
     if (!userPreferences.meditationEnabled) {
-      stopMeditationSound();
+      stopMeditationSound({ fadeSeconds: fadeOutSeconds });
     } else if (
-      appState.selectedEmotion &&
+      activeStateKey &&
       (!meditationSound ||
-        meditationSound.stateKey !== appState.selectedEmotion)
+        meditationSound.stateKey !== activeStateKey)
     ) {
-      playMeditationSound(appState.selectedEmotion);
+      playMeditationSound(activeStateKey);
     } else {
       updateMeditationVolume();
     }
@@ -986,17 +1179,27 @@ function updateSoundscape() {
 function updateSoundStatus() {
   if (!soundStatus) return;
 
+  const activeStateKey = getActiveAudioStateKey();
+
+  if (!activeStateKey) {
+    soundStatus.textContent =
+      "Sound is paused until you enter a regulation environment.";
+    return;
+  }
+
   if (!userPreferences.soundEnabled) {
     soundStatus.textContent = "Sound is off. Your visual routine stays active.";
     return;
   }
 
   const activeLayers = [];
-  if (userPreferences.natureEnabled) {
+  if (userPreferences.natureEnabled && natureSource) {
     activeLayers.push(userPreferences.natureType);
   }
-  if (userPreferences.meditationEnabled) activeLayers.push("meditation");
-  if (userPreferences.guidedMeditationEnabled) {
+  if (userPreferences.meditationEnabled && meditationSound) {
+    activeLayers.push("meditation");
+  }
+  if (userPreferences.guidedMeditationEnabled && isGuidedMeditationPlaying) {
     activeLayers.push("guided voice");
   }
 
@@ -1394,6 +1597,7 @@ let breathingIntervalId = null;
 let breathingAnimationFrameId = null;
 let fontScaleObserver = null;
 let fontScaleFrameId = null;
+let emotionSelectionToken = 0;
 
 const defaultBreathingOrbScales = {
   inhaleStart: 1,
@@ -1561,6 +1765,20 @@ function generateEmotionGrid() {
  * @param {string} emotionKey - Key of the selected emotional state
  */
 function selectEmotion(emotionKey, event) {
+  const selectionToken = ++emotionSelectionToken;
+
+  if (
+    appState.selectedEmotion &&
+    appState.selectedEmotion !== emotionKey
+  ) {
+    stopActiveSoundscape({
+      fadeSeconds: audioLifecycle.quickFadeSeconds,
+      force: true,
+      guidedMessage: "Guided voice will follow the selected state.",
+      updateStatus: false,
+    });
+  }
+
   appState.selectedEmotion = emotionKey;
   const state = emotionalStates[emotionKey];
   trackEmotionSelection(emotionKey);
@@ -1576,6 +1794,13 @@ function selectEmotion(emotionKey, event) {
 
   // Transition to regulation section
   setTimeout(() => {
+    if (
+      selectionToken !== emotionSelectionToken ||
+      appState.selectedEmotion !== emotionKey
+    ) {
+      return;
+    }
+
     transitionToSection("regulation");
     setupRegulationEnvironment(emotionKey);
   }, 500);
@@ -1626,6 +1851,13 @@ function transitionToSection(targetSection) {
   }, 100);
 
   appState.currentSection = targetSection;
+
+  if (targetSection !== "regulation") {
+    stopActiveSoundscape({
+      fadeSeconds: audioLifecycle.fadeOutSeconds,
+      guidedMessage: "Guided voice will follow the selected state.",
+    });
+  }
 }
 
 // ============================================================
@@ -2541,9 +2773,11 @@ beginButton.addEventListener("click", () => {
  */
 backButton.addEventListener("click", () => {
   stopBreathingExercise();
-  stopMeditationSound({ fadeSeconds: 0.4 });
-  stopGuidedMeditation("Guided voice will follow the selected state.");
-  updateSoundStatus();
+  stopActiveSoundscape({
+    fadeSeconds: audioLifecycle.fadeOutSeconds,
+    guidedMessage: "Guided voice will follow the selected state.",
+    updateStatus: false,
+  });
   breathingText.textContent = "Get ready...";
   breathingCount.textContent = "";
   transitionToSection("state");
@@ -2561,17 +2795,11 @@ resetButton.addEventListener("click", () => {
   journalInput.value = "";
   charCount.textContent = "0";
 
-  // Stop all active audio to prevent sounds continuing after reset
-  stopNatureSound();
-  stopMeditationSound({ fadeSeconds: 0.35 });
-  stopGuidedMeditation("Guided voice will follow the selected state.");
-
-  // Immediately mute all audio by setting master gain to 0
-  if (ambientMasterGain && audioContext) {
-    setGainValue(ambientMasterGain, 0, 0.1); // Fast fade to silence
-  }
-
-  updateSoundStatus();
+  stopActiveSoundscape({
+    fadeSeconds: audioLifecycle.quickFadeSeconds,
+    guidedMessage: "Guided voice will follow the selected state.",
+    updateStatus: false,
+  });
   transitionToSection("hero");
 });
 
@@ -2666,6 +2894,32 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && document.activeElement.classList.contains("btn")) {
     document.activeElement.click();
   }
+});
+
+function pauseAudioForInactiveDocument(force = false) {
+  stopActiveSoundscape({
+    fadeSeconds: force ? 0.08 : audioLifecycle.quickFadeSeconds,
+    force,
+    guidedMessage: "Guided voice will follow the selected state.",
+    updateStatus: false,
+  });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pauseAudioForInactiveDocument();
+    return;
+  }
+
+  updateSoundscape({ fadeInSeconds: audioLifecycle.fadeInSeconds });
+});
+
+window.addEventListener("pagehide", () => {
+  pauseAudioForInactiveDocument(true);
+});
+
+window.addEventListener("pageshow", () => {
+  updateSoundscape({ fadeInSeconds: audioLifecycle.fadeInSeconds });
 });
 
 // ============================================================
