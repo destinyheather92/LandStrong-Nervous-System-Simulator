@@ -226,7 +226,7 @@ function setGainValue(gainNode, value, rampSeconds = 0.25) {
 }
 
 function getActiveAudioStateKey() {
-  if (document.hidden || appState.currentSection !== "regulation") {
+  if (appState.currentSection !== "regulation") {
     return null;
   }
 
@@ -1872,7 +1872,7 @@ function setupRegulationEnvironment(emotionKey) {
   const state = emotionalStates[emotionKey];
 
   // Update visual state
-  regulationSection.className = "regulation-section hidden";
+  regulationSection.className = "regulation-section";
   regulationSection.classList.add("active", state.className);
 
   // Update title
