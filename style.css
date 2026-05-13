@@ -133,12 +133,10 @@
   --blur-small: var(--accessibility-blur);
   --font-scale: 1;
   --glow-intensity: 0.8;
-  --glow-primary: 0 0 calc(30px * var(--glow-intensity))
-    rgba(64, 83, 159, 0.6);
+  --glow-primary: 0 0 calc(30px * var(--glow-intensity)) rgba(64, 83, 159, 0.6);
   --glow-secondary: 0 0 calc(20px * var(--glow-intensity))
     rgba(80, 141, 200, 0.4);
-  --glow-soft: 0 0 calc(15px * var(--glow-intensity))
-    rgba(112, 129, 191, 0.3);
+  --glow-soft: 0 0 calc(15px * var(--glow-intensity)) rgba(112, 129, 191, 0.3);
 }
 
 body.theme-light {
@@ -264,11 +262,12 @@ body {
 /* Section Base Styles */
 /* This turns every section into a full-screen container and toggles between active and hidden classes to display */
 section {
+  height: 100%; 
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  /* min-height: 100vh; */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -428,9 +427,9 @@ button:disabled {
 /* ============================================================
    PARTICLES SYSTEM
    ============================================================ */
-    /* This css creates a flaoting particle system in the background that adds subtle movement. THis is designed to make the website feel more immersive calming and alive without distracting the user.  */
-    /* .particles-container acts as a full-screen layer that sits behind or around the content. Since it stretches across the entire viewport and uses:  */
-    /* pointer-events: none -- users can still click buttons and interact with the UI normally without particles blocking everything.  */
+/* This css creates a flaoting particle system in the background that adds subtle movement. THis is designed to make the website feel more immersive calming and alive without distracting the user.  */
+/* .particles-container acts as a full-screen layer that sits behind or around the content. Since it stretches across the entire viewport and uses:  */
+/* pointer-events: none -- users can still click buttons and interact with the UI normally without particles blocking everything.  */
 .particles-container {
   position: absolute;
   top: 0;
@@ -668,7 +667,7 @@ button:disabled {
   letter-spacing: 2px;
   text-transform: uppercase;
   animation: floatAround 10s ease-in-out infinite;
-/* The :nth-child() selectors position each word in different locations and stagger animation timing so the motion feels organic rather than repetitive. */
+  /* The :nth-child() selectors position each word in different locations and stagger animation timing so the motion feels organic rather than repetitive. */
   &:nth-child(1) {
     top: 20%;
     left: 10%;
@@ -705,10 +704,10 @@ button:disabled {
 /* ============================================================
    STATE SELECTION SECTION
    ============================================================ */
-        /* reating the emotional state selection screen where users choose how they’re currently feeling before entering the regulation experience. */
+/* reating the emotional state selection screen where users choose how they’re currently feeling before entering the regulation experience. */
 .state-section {
   background: var(--section-background);
-    /* background: linear-gradient(135deg, #ececec 0%, #fafafc 50%, #0f1419 100%); */
+  /* background: linear-gradient(135deg, #ececec 0%, #fafafc 50%, #0f1419 100%); */
   overflow-y: auto;
 }
 
@@ -771,7 +770,7 @@ button:disabled {
 /* Emotion Grid */
 .emotion-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(250px, 1fr));
+  grid-template-columns: repeat(3, minmax(0px, 1fr));
   gap: 30px;
   animation: fadeIn 1s ease-out 0.2s forwards;
   opacity: 0;
@@ -866,7 +865,7 @@ button:disabled {
 /* ============================================================
    REGULATION SECTION
    ============================================================ */
-    /* styling the main regulation experience of the app — the actual nervous system support environment users interact with after selecting an emotional state. It focuses heavily on responsive layouts, emotional visual feedback, immersive breathing animations, grounding modules, journaling UI, and state-based visual behavior. */
+/* styling the main regulation experience of the app — the actual nervous system support environment users interact with after selecting an emotional state. It focuses heavily on responsive layouts, emotional visual feedback, immersive breathing animations, grounding modules, journaling UI, and state-based visual behavior. */
 .regulation-section {
   background: var(--section-background);
   overflow-y: auto;
@@ -1199,7 +1198,7 @@ button:disabled {
 }
 
 /* Grounding Module */
-    /* uses stacked flexbox layouts for grounding technique cards. */
+/* uses stacked flexbox layouts for grounding technique cards. */
 .grounding-content {
   display: flex;
   flex-direction: column;
@@ -1835,6 +1834,20 @@ body.theme-light .reflection-card {
 
   .emotion-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .hero-logo {
+    width: 320px;
+    max-width: 90vw;
+  }
+  .state-section {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .state-content {
+    padding-top: 120px;
+    padding-bottom: 40px;
   }
 
   .regulation-container {

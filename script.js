@@ -38,7 +38,7 @@ const defaultActivity = {
   breathingSessions: [],
   appVisits: [],
 };
-
+// This function is a safekeeper for reading data from local storage. It tries to parse the stored JSON value and returns a fallback if anything goes wrong, preventing crashes from corrupted or unavailable storage data.
 function readStorage(key, fallback) {
   try {
     const storedValue = localStorage.getItem(key);
@@ -49,6 +49,7 @@ function readStorage(key, fallback) {
   }
 }
 
+// This function saves data to local storage safely by stringifying the value and catching any errors that might occur during the write process, such as quota issues or unavailable storage.
 function writeStorage(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -57,6 +58,7 @@ function writeStorage(key, value) {
   }
 }
 
+// This function is loading the user's preferences from local storage, merging them with default preferences to ensure all necessary settings are present. It provides a robust way to initialize the app's configuration while handling any missing or corrupted data gracefully.
 function loadPreferences() {
   return {
     ...defaultPreferences,
@@ -64,6 +66,7 @@ function loadPreferences() {
   };
 }
 
+// THis function is laoding the users activity data from local storage, ensuring that the expected arrays for emotion history, breathing sessions, and app visits are present and properly initialized. It provides a structured way to track the user's interactions and progress within the app while safeguarding against missing or malformed data.
 function loadActivity() {
   const storedActivity = readStorage(storageKeys.activity, {});
 
@@ -82,8 +85,9 @@ function loadActivity() {
 
 let userPreferences = loadPreferences();
 let activityData = loadActivity();
-
-const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+//These set up the guided meditation voice and text elements, as well as the sound status display. They allow the app to control and update the guided meditation interface and provide feedback on the current soundscape configuration.
+const AudioContextConstructor =
+  window.AudioContext || window.webkitAudioContext;
 const audioContext = AudioContextConstructor
   ? new AudioContextConstructor()
   : null;
@@ -258,6 +262,7 @@ function configureNatureTexture() {
   natureFilter = audioContext.createBiquadFilter();
 
   if (userPreferences.natureType === "ocean") {
+    // Ocean: Low-mid frequency swell with subtle modulation
     natureFilter.type = "lowpass";
     natureFilter.frequency.value = 520;
     natureFilter.Q.value = 0.9;
@@ -270,11 +275,48 @@ function configureNatureTexture() {
     natureLfoGain.connect(natureFilter.frequency);
     natureLfo.start();
   } else if (userPreferences.natureType === "forest") {
+    // Forest: Mid-high frequency with periodic chime accents
     natureFilter.type = "bandpass";
     natureFilter.frequency.value = 1450;
     natureFilter.Q.value = 0.7;
     forestIntervalId = setInterval(playForestChime, 4200);
+  } else if (userPreferences.natureType === "whiteNoise") {
+    // White Noise: Gentle, full spectrum with treble roll-off for smooth texture
+    // Lowpass reduces harsh high frequencies for a softer, more calming white noise
+    natureFilter.type = "lowpass";
+    natureFilter.frequency.value = 6500; // Smooth treble cutoff instead of harsh high frequencies
+    natureFilter.Q.value = 0.5;
+  } else if (userPreferences.natureType === "greenNoise") {
+    // Green Noise: Soft mid-frequency boost - pleasant, natural sounding
+    // Similar to rustling leaves or soft wind - reduced aggressiveness
+    natureFilter.type = "peaking";
+    natureFilter.frequency.value = 800;
+    natureFilter.Q.value = 0.7; // Softer peak (was 1.2)
+    natureFilter.gain.value = 3; // Gentler boost (was 6)
+
+    natureLfo = audioContext.createOscillator();
+    natureLfoGain = audioContext.createGain();
+    natureLfo.frequency.value = 0.12;
+    natureLfoGain.gain.value = 100; // Reduced modulation intensity (was 180)
+    natureLfo.connect(natureLfoGain);
+    natureLfoGain.connect(natureFilter.frequency);
+    natureLfo.start();
+  } else if (userPreferences.natureType === "brownNoise") {
+    // Brown Noise: Deep, low frequencies (below 500Hz) - rumbling, grounding effect
+    // Like distant thunder or ocean depths
+    natureFilter.type = "lowpass";
+    natureFilter.frequency.value = 280;
+    natureFilter.Q.value = 0.8;
+
+    natureLfo = audioContext.createOscillator();
+    natureLfoGain = audioContext.createGain();
+    natureLfo.frequency.value = 0.06;
+    natureLfoGain.gain.value = 120;
+    natureLfo.connect(natureLfoGain);
+    natureLfoGain.connect(natureFilter.frequency);
+    natureLfo.start();
   } else {
+    // Rain (default): High-pass filter for crisp, rainlike texture
     natureFilter.type = "highpass";
     natureFilter.frequency.value = 900;
     natureFilter.Q.value = 0.5;
@@ -407,9 +449,12 @@ function stopMeditationSound(options = {}) {
     safeStopAudioNode(lfo, stopTime + 0.05);
   });
 
-  setTimeout(() => {
-    disconnectMeditationSound(sound);
-  }, (fadeSeconds + 0.2) * 1000);
+  setTimeout(
+    () => {
+      disconnectMeditationSound(sound);
+    },
+    (fadeSeconds + 0.2) * 1000,
+  );
 }
 
 function playMeditationSound(stateKey) {
@@ -616,12 +661,16 @@ function selectMeditationVoice() {
 
   // Try to find a voice matching preferred patterns
   for (const pattern of preferredVoicePatterns) {
-    const voice = voices.find((v) => pattern.test(v.name) || pattern.test(v.voiceURI));
+    const voice = voices.find(
+      (v) => pattern.test(v.name) || pattern.test(v.voiceURI),
+    );
     if (voice) return voice;
   }
 
   // Fallback: prefer female voices, then any available voice
-  const femaleVoice = voices.find((v) => v.name.toLowerCase().includes("female"));
+  const femaleVoice = voices.find((v) =>
+    v.name.toLowerCase().includes("female"),
+  );
   return femaleVoice || voices[0];
 }
 
@@ -821,7 +870,8 @@ function updateSoundscape() {
       stopMeditationSound();
     } else if (
       appState.selectedEmotion &&
-      (!meditationSound || meditationSound.stateKey !== appState.selectedEmotion)
+      (!meditationSound ||
+        meditationSound.stateKey !== appState.selectedEmotion)
     ) {
       playMeditationSound(appState.selectedEmotion);
     } else {
@@ -857,7 +907,7 @@ function updateSoundStatus() {
 // ============================================================
 // EMOTIONAL STATE CONFIGURATIONS
 // ============================================================
-        //acting like a mini database for every emotional state. Each state contains specific properties that define how the app should behave when that state is selected, including visual styling, breathing exercise parameters, prompts, grounding techniques, and particle effects. This structured data allows the app to dynamically adapt its content and appearance based on the user's emotional state selection, creating a personalized regulation experience.
+//acting like a mini database for every emotional state. Each state contains specific properties that define how the app should behave when that state is selected, including visual styling, breathing exercise parameters, prompts, grounding techniques, and particle effects. This structured data allows the app to dynamically adapt its content and appearance based on the user's emotional state selection, creating a personalized regulation experience.
 const emotionalStates = {
   fight: {
     name: "Fight",
@@ -949,7 +999,8 @@ const emotionalStates = {
     breathingCycles: 2,
     breathingPhrase: "Gently return to your body",
     breathingStyle: "Very gentle, soft, and slow",
-    breathingNote: "A tiny pause keeps the breath supportive without forcing retention.",
+    breathingNote:
+      "A tiny pause keeps the breath supportive without forcing retention.",
     orbProfile: { motion: "freeze", inhaleEnd: 1.18 },
     color: "#7081bf",
     particles: { count: 25, speed: "slow" },
@@ -989,7 +1040,8 @@ const emotionalStates = {
     breathingCycles: 2,
     breathingPhrase: "Breath by breath, moment by moment",
     breathingStyle: "Deep, balanced, and not intense",
-    breathingNote: "Balanced breathing can restore presence without overstimulating.",
+    breathingNote:
+      "Balanced breathing can restore presence without overstimulating.",
     orbProfile: { motion: "shutdown", inhaleEnd: 1.22 },
     color: "#4a5464",
     particles: { count: 15, speed: "slow" },
@@ -1212,12 +1264,16 @@ const themeToggleButton = document.getElementById("themeToggleButton");
 const soundEnabledToggle = document.getElementById("soundEnabledToggle");
 const natureSoundToggle = document.getElementById("natureSoundToggle");
 const meditationSoundToggle = document.getElementById("meditationSoundToggle");
-const guidedMeditationToggle = document.getElementById("guidedMeditationToggle");
+const guidedMeditationToggle = document.getElementById(
+  "guidedMeditationToggle",
+);
 const natureSoundSelect = document.getElementById("natureSoundSelect");
 const masterVolumeInput = document.getElementById("masterVolumeInput");
 const natureVolumeInput = document.getElementById("natureVolumeInput");
 const meditationVolumeInput = document.getElementById("meditationVolumeInput");
-const guidedMeditationButton = document.getElementById("guidedMeditationButton");
+const guidedMeditationButton = document.getElementById(
+  "guidedMeditationButton",
+);
 const guidedMeditationText = document.getElementById("guidedMeditationText");
 const soundStatus = document.getElementById("soundStatus");
 const affirmationText = document.getElementById("affirmationText");
@@ -1433,6 +1489,9 @@ function selectEmotion(emotionKey, event) {
  * @param {string} targetSection - Section to transition to: 'hero', 'state', 'regulation'
  */
 function transitionToSection(targetSection) {
+  // Scroll to top of page when transitioning between sections
+  window.scrollTo(0, 0);
+
   // Hide current section
   if (appState.currentSection === "hero")
     heroSection.classList.remove("active");
@@ -1607,8 +1666,7 @@ function easeBreathProgress(progress, phaseType, motion) {
 function setBreathingOrbScale(scale) {
   const glowProgress =
     (scale - activeBreathingOrbScales.inhaleStart) /
-    (activeBreathingOrbScales.inhaleEnd -
-      activeBreathingOrbScales.inhaleStart);
+    (activeBreathingOrbScales.inhaleEnd - activeBreathingOrbScales.inhaleStart);
   const safeGlowProgress = Math.max(0, Math.min(glowProgress, 1));
 
   breathingOrb.style.setProperty("--orb-scale", scale.toFixed(3));
@@ -1940,7 +1998,8 @@ function showAffirmation(emotionKey = getRoutineStateKey(), forceNew = false) {
   const previousText = lastAffirmation ? lastAffirmation.text : "";
   const candidates = affirmations.filter((text) => text !== previousText);
   const selectedText =
-    candidates[Math.floor(Math.random() * candidates.length)] || affirmations[0];
+    candidates[Math.floor(Math.random() * candidates.length)] ||
+    affirmations[0];
 
   const affirmation = {
     text: selectedText,
@@ -2125,7 +2184,10 @@ function applyPreferences(options = {}) {
     "theme-light",
     userPreferences.theme === "light",
   );
-  document.body.classList.toggle("theme-dark", userPreferences.theme === "dark");
+  document.body.classList.toggle(
+    "theme-dark",
+    userPreferences.theme === "dark",
+  );
   document.documentElement.style.setProperty(
     "--font-scale",
     (userPreferences.fontScale / 100).toFixed(2),
@@ -2147,7 +2209,8 @@ function syncPreferenceControls() {
   if (soundEnabledToggle) {
     soundEnabledToggle.checked = userPreferences.soundEnabled;
   }
-  if (natureSoundToggle) natureSoundToggle.checked = userPreferences.natureEnabled;
+  if (natureSoundToggle)
+    natureSoundToggle.checked = userPreferences.natureEnabled;
   if (meditationSoundToggle) {
     meditationSoundToggle.checked = userPreferences.meditationEnabled;
   }
@@ -2256,7 +2319,6 @@ function bindWellnessControls() {
   if (refreshRoutineButton) {
     refreshRoutineButton.addEventListener("click", renderPersonalRoutine);
   }
-
 }
 
 // ============================================================
@@ -2388,6 +2450,7 @@ backButton.addEventListener("click", () => {
 
 /**
  * Reset button - returns to hero section and clears state
+ * Stops all audio (breathing, meditation, guided voice, and nature sounds)
  */
 resetButton.addEventListener("click", () => {
   appState.selectedEmotion = null;
@@ -2396,8 +2459,17 @@ resetButton.addEventListener("click", () => {
   breathingCount.textContent = "";
   journalInput.value = "";
   charCount.textContent = "0";
+
+  // Stop all active audio to prevent sounds continuing after reset
+  stopNatureSound();
   stopMeditationSound({ fadeSeconds: 0.35 });
   stopGuidedMeditation("Guided voice will follow the selected state.");
+
+  // Immediately mute all audio by setting master gain to 0
+  if (ambientMasterGain && audioContext) {
+    setGainValue(ambientMasterGain, 0, 0.1); // Fast fade to silence
+  }
+
   updateSoundStatus();
   transitionToSection("hero");
 });
