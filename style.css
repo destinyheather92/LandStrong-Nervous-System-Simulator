@@ -170,8 +170,10 @@ body.theme-light {
 html,
 body {
   width: 100%;
+  min-width: 0;
   height: 100%;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -267,6 +269,9 @@ section {
   top: 0;
   left: 0;
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   /* min-height: 100vh; */
   display: flex;
   align-items: center;
@@ -435,7 +440,9 @@ button:disabled {
   top: 0;
   left: 0;
   width: 100%;
+  max-width: 100%;
   height: 100%;
+  overflow: hidden;
   pointer-events: none;
 }
 /* defines the particles themselves- its a tiny glowing circle created using radial gradients, transparency, glow shadows, rounded edges.  */
@@ -508,7 +515,9 @@ button:disabled {
   top: 0;
   left: 0;
   width: 100%;
+  max-width: 100%;
   height: 100%;
+  overflow: hidden;
   z-index: 0;
 }
 
@@ -652,9 +661,11 @@ button:disabled {
 .floating-text {
   position: absolute;
   width: 100%;
+  max-width: 100%;
   height: 100%;
   top: 0;
   left: 0;
+  overflow: hidden;
   pointer-events: none;
   z-index: 5;
 }
@@ -708,6 +719,7 @@ button:disabled {
 .state-section {
   background: var(--section-background);
   /* background: linear-gradient(135deg, #ececec 0%, #fafafc 50%, #0f1419 100%); */
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -716,7 +728,9 @@ button:disabled {
   top: 0;
   left: 0;
   width: 100%;
+  max-width: 100%;
   height: 100%;
+  overflow: hidden;
   z-index: 0;
 }
 
@@ -724,6 +738,7 @@ button:disabled {
   position: relative;
   z-index: 10;
   width: 100%;
+  min-width: 0;
   max-width: 1200px;
   margin: 0 auto;
   padding: 60px 40px;
@@ -772,6 +787,7 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(3, minmax(0px, 1fr));
   gap: 30px;
+  min-width: 0;
   animation: fadeIn 1s ease-out 0.2s forwards;
   opacity: 0;
 }
@@ -868,6 +884,7 @@ button:disabled {
 /* styling the main regulation experience of the app — the actual nervous system support environment users interact with after selecting an emotional state. It focuses heavily on responsive layouts, emotional visual feedback, immersive breathing animations, grounding modules, journaling UI, and state-based visual behavior. */
 .regulation-section {
   background: var(--section-background);
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   align-items: flex-start;
@@ -879,7 +896,9 @@ button:disabled {
   top: 0;
   left: 0;
   width: 100%;
+  max-width: 100%;
   height: 100%;
+  overflow: hidden;
   z-index: 0;
 }
 
@@ -887,6 +906,7 @@ button:disabled {
   position: relative;
   z-index: 10;
   width: 100%;
+  min-width: 0;
   max-width: 1180px;
   padding: 60px 40px;
 }
@@ -932,6 +952,7 @@ button:disabled {
     "breathing prompts";
   align-items: stretch;
   gap: 24px;
+  min-width: 0;
   margin-bottom: 32px;
 }
 
@@ -957,6 +978,8 @@ button:disabled {
   border-radius: 20px;
   backdrop-filter: blur(var(--blur-small));
   animation: slideUp 0.8s ease-out;
+  min-width: 0;
+  max-width: 100%;
 }
 
 @keyframes slideUp {
@@ -1255,6 +1278,8 @@ button:disabled {
   margin-bottom: 40px;
   animation: slideUp 0.8s ease-out 0.1s forwards;
   opacity: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .journal-section h3 {
@@ -1448,6 +1473,8 @@ button:disabled {
 .insights-grid {
   display: grid;
   gap: 24px;
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: 32px;
 }
 
@@ -1833,7 +1860,7 @@ body.theme-light .reflection-card {
   }
 
   .emotion-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
   .hero-logo {
@@ -1851,7 +1878,7 @@ body.theme-light .reflection-card {
   }
 
   .regulation-container {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "breathing"
       "grounding"
@@ -1860,7 +1887,7 @@ body.theme-light .reflection-card {
 
   .wellness-grid,
   .insights-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sound-module {
@@ -1903,7 +1930,7 @@ body.theme-light .reflection-card {
   .regulation-container,
   .wellness-grid,
   .insights-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .regulation-container {

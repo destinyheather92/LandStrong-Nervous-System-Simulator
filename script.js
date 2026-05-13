@@ -637,41 +637,137 @@ function updateMeditationVolume() {
 
 /**
  * Intelligently selects the best available meditation voice for warm, natural delivery.
- * Prioritizes soft, natural-sounding female neural voices that reduce robotic speech.
+ * Prioritizes soft UK/Commonwealth and neural voices that reduce robotic speech.
  * Falls back gracefully if preferred voices are unavailable.
  */
+function isAppleTouchDevice() {
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+
+  return (
+    /iPad|iPhone|iPod/i.test(userAgent) ||
+    (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function getVoiceSearchText(voice) {
+  return [
+    voice.name,
+    voice.voiceURI,
+    voice.lang,
+    voice.localService ? "local" : "",
+    voice.default ? "default" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function scoreMeditationVoice(voice, index) {
+  const searchText = getVoiceSearchText(voice);
+  const language = (voice.lang || "").toLowerCase();
+  const isiOS = isAppleTouchDevice();
+  let score = 0;
+
+  if (/en[-_]?gb|united kingdom|british|uk english/.test(searchText)) {
+    score += 80;
+  } else if (/en[-_]?(ie|au|nz)|irish|australian|new zealand/.test(searchText)) {
+    score += 36;
+  } else if (/^en([_-]|$)/.test(language) || /english/.test(searchText)) {
+    score += 18;
+  } else {
+    score -= 90;
+  }
+
+  if (
+    /google.*uk.*english.*female|google.*english.*united kingdom.*female|microsoft.*(sonia|libby)|\b(serena|kate|martha)\b/.test(
+      searchText,
+    )
+  ) {
+    score += 120;
+  }
+
+  if (
+    /\b(moira|fiona|karen|ava|victoria|samantha|allison|susan|zoe)\b|microsoft.*(aria|jenny|zira)|google.*female/.test(
+      searchText,
+    )
+  ) {
+    score += 52;
+  }
+
+  if (/female|woman|natural|neural|premium|enhanced|siri/.test(searchText)) {
+    score += 28;
+  }
+
+  if (isiOS) {
+    if (/\b(serena|kate|martha|moira|fiona|karen)\b/.test(searchText)) {
+      score += 42;
+    }
+
+    if (/\bsamantha\b/.test(searchText)) {
+      score -= 16;
+    }
+  }
+
+  if (
+    /\b(daniel|fred|alex|tom|thomas|xander|oliver|arthur|aaron|nathan|david|mark|george)\b|\bmale\b/.test(
+      searchText,
+    )
+  ) {
+    score -= 70;
+  }
+
+  if (/robot|compact/.test(searchText)) {
+    score -= 30;
+  }
+
+  return score - index / 1000;
+}
+
 function selectMeditationVoice() {
   if (!supportsGuidedMeditation()) return null;
 
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
 
-  // Priority list: soft, natural-sounding female neural voices
-  const preferredVoicePatterns = [
-    /google.*female.*neural/i,
-    /google.*uk.*english.*female/i,
-    /microsoft.*aria/i,
-    /microsoft.*jenny/i,
-    /samantha/i,
-    /aurora/i,
-    /nova/i,
-    /google.*english.*female/i,
-    /female/i,
-  ];
+  const englishVoices = voices.filter((voice) => {
+    const language = (voice.lang || "").toLowerCase();
+    const searchText = getVoiceSearchText(voice);
 
-  // Try to find a voice matching preferred patterns
-  for (const pattern of preferredVoicePatterns) {
-    const voice = voices.find(
-      (v) => pattern.test(v.name) || pattern.test(v.voiceURI),
+    return (
+      !language ||
+      /^en([_-]|$)/.test(language) ||
+      /english|british|united kingdom|serena|kate|martha|moira|fiona|karen|samantha/.test(
+        searchText,
+      )
     );
-    if (voice) return voice;
+  });
+  const candidates = englishVoices.length ? englishVoices : voices;
+
+  return candidates
+    .map((voice, index) => ({
+      voice,
+      score: scoreMeditationVoice(voice, index),
+    }))
+    .sort((a, b) => b.score - a.score)[0].voice;
+}
+
+function getGuidedMeditationSpeechSettings() {
+  if (isAppleTouchDevice()) {
+    return {
+      rate: 0.84,
+      pitch: 1,
+      volumeScale: 0.82,
+      fallbackLanguage: "en-GB",
+    };
   }
 
-  // Fallback: prefer female voices, then any available voice
-  const femaleVoice = voices.find((v) =>
-    v.name.toLowerCase().includes("female"),
-  );
-  return femaleVoice || voices[0];
+  return {
+    rate: 0.72,
+    pitch: 0.88,
+    volumeScale: 0.9,
+    fallbackLanguage: "en-GB",
+  };
 }
 
 function supportsGuidedMeditation() {
@@ -742,6 +838,7 @@ function speakGuidedMeditationLine(stateKey) {
 
   const line = lines[guidedMeditationLineIndex];
   const utterance = new SpeechSynthesisUtterance(line);
+  const speechSettings = getGuidedMeditationSpeechSettings();
   const voiceVolume =
     (userPreferences.masterVolume / 100) *
     (userPreferences.meditationVolume / 100);
@@ -750,14 +847,18 @@ function speakGuidedMeditationLine(stateKey) {
   if (selectedMeditationVoice) {
     utterance.voice = selectedMeditationVoice;
   }
+  utterance.lang =
+    (selectedMeditationVoice && selectedMeditationVoice.lang) ||
+    speechSettings.fallbackLanguage;
 
   // Optimized speech parameters for warm, human-like meditation guidance:
-  // - Slower rate (0.70-0.75) for relaxed, natural pacing
-  // - Softer pitch (0.85-0.92) for warmer, less robotic tone
-  // - Reduced volume (0.80-0.90) for intimate, calming presence
-  utterance.rate = 0.72; // Significantly slower than default (1.0) for meditative pacing
-  utterance.pitch = 0.88; // Slightly lower for warmer, more calming tone
-  utterance.volume = Math.max(0, Math.min(voiceVolume * 0.9, 0.9)); // Softer, more intimate delivery
+  // iOS voices distort when slowed or pitched down too far, so those settings stay closer to native.
+  utterance.rate = speechSettings.rate;
+  utterance.pitch = speechSettings.pitch;
+  utterance.volume = Math.max(
+    0,
+    Math.min(voiceVolume * speechSettings.volumeScale, 0.9),
+  );
 
   if (guidedMeditationText) {
     guidedMeditationText.textContent = line;
