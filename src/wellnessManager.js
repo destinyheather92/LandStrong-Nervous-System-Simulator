@@ -12,12 +12,12 @@ export function createWellnessManager({
   affirmationsByState,
 }) {
   const routineRefreshOffsets = {};
-
+//loads data from local storage and provides functions to track user activity, generate personalized routines, and render the wellness dashboard and timeline. It also manages affirmations based on the user's emotional state and recent activity. The wellness manager is designed to be modular and interacts with the app state, DOM elements, and storage utilities to create a cohesive user experience focused on emotional regulation and self-reflection.
   function getReflections() {
     const reflections = readStorage(storageKeys.reflections, []);
     return Array.isArray(reflections) ? reflections : [];
   }
-
+// This function finds the state key corresponding to a given state name by searching through the emotionalStates object. If it finds a match, it returns the key; otherwise, it defaults to "calm". This is useful for cases where we have a state name (e.g., from a reflection) but need to link it back to the corresponding state key for consistency in tracking and rendering.
   function getStateKeyFromName(stateName) {
     const entry = Object.entries(emotionalStates).find(
       ([, state]) => state.name === stateName,
@@ -25,6 +25,7 @@ export function createWellnessManager({
     return entry ? entry[0] : "calm";
   }
 
+  //keeping up with the user's emotional state and activity history, providing personalized recommendations, and creating an engaging and supportive experience that encourages regular check-ins, self-reflection, and emotional regulation practices. By tracking key interactions and rendering dynamic content based on the user's data, the wellness manager helps users build awareness of their emotional patterns and offers tailored guidance to support their well-being journey.
   function trackEmotionSelection(emotionKey) {
     const state = emotionalStates[emotionKey];
     const now = new Date();
@@ -40,6 +41,7 @@ export function createWellnessManager({
     saveActivity();
   }
 
+  //this is called when a user completes a breathing session. It records the session in the activity data with details about the emotional state it was associated with, the breathing pattern used, and the timestamp. After saving the activity, it triggers a re-render of the dashboard, timeline, and personal routine to reflect the new session and update any recommendations or insights based on the user's evolving history.
   function trackBreathingSession(emotionKey) {
     const state = emotionalStates[emotionKey];
     const now = new Date();
@@ -59,6 +61,8 @@ export function createWellnessManager({
     renderPersonalRoutine();
   }
 
+
+  //tracking the visits to the app and adding it to the activity data. Each visit is recorded with a unique ID based on the current timestamp and the creation date. After saving the visit, it can be used to analyze user engagement over time, show patterns in app usage, and provide insights into how frequently the user is checking in with their emotional state and using the app's features. This information can also be displayed on the dashboard to encourage regular use and highlight progress.
   function trackAppVisit() {
     const now = new Date();
 
@@ -69,7 +73,7 @@ export function createWellnessManager({
 
     saveActivity();
   }
-
+// this function takes an array of records (such as emotion history or breathing sessions) and counts how many times each emotional state appears in those records. It uses the stateKey to categorize the counts, and if a record has a stateName instead, it converts it to a stateKey using the getStateKeyFromName function. The result is an object where the keys are stateKeys and the values are the counts of how many times that state appears in the provided records. This is useful for analyzing patterns in the user's emotional history and generating insights for the dashboard and personalized routines.
   function countByState(records) {
     return records.reduce((totals, record) => {
       const key = record.stateKey || getStateKeyFromName(record.stateName);
@@ -95,7 +99,7 @@ export function createWellnessManager({
     const recentCounts = countByState(recentStates);
     return Object.entries(recentCounts).sort((a, b) => b[1] - a[1])[0][0];
   }
-
+// this is rendering the affirmation on the dashboard based on the provided affirmation object. It checks if the necessary DOM elements for displaying the affirmation are present and if the affirmation data is valid. If everything is in place, it updates the text content of the affirmation and its metadata (such as when it was shown and for which emotional state) to provide a personalized and timely message to the user. This helps reinforce positive messages and encourages users to engage with their emotional well-being regularly.
   function renderAffirmation(affirmation) {
     if (!dom.affirmationText || !dom.affirmationMeta || !affirmation) return;
 
@@ -118,7 +122,7 @@ export function createWellnessManager({
       renderAffirmation(lastAffirmation);
       return;
     }
-
+// this cycles through the affirmations for the given emotional state and selects one that is different from the last shown affirmation (if available). It ensures that the user receives a fresh message while still providing relevant content based on their current emotional state. The selected affirmation is then saved to storage and rendered on the dashboard, creating a dynamic and personalized experience that encourages users to engage with their emotional well-being regularly.
     const affirmations =
       affirmationsByState[emotionKey] || affirmationsByState.calm;
     const previousText = lastAffirmation ? lastAffirmation.text : "";
@@ -137,7 +141,7 @@ export function createWellnessManager({
     writeStorage(storageKeys.lastAffirmation, affirmation);
     renderAffirmation(affirmation);
   }
-
+//render dashboard function updates the various statistics and insights displayed on the wellness dashboard based on the user's activity data. It calculates counts of emotional states, breathing sessions, journal reflections, and app visits, and identifies the dominant emotional state from the user's check-ins. The dashboard is then updated with this information to provide the user with a clear overview of their emotional patterns and engagement with the app, encouraging continued use and self-reflection.
   function renderDashboard() {
     if (!dom.stateCountStat) return;
 

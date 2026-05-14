@@ -1,4 +1,4 @@
-// This gives stored events a friendly label without exposing raw timestamps.
+// This gives stored events a friendly label without exposing raw timestamps meaning the user can see when they last checked in or did a breathing session without needing to understand date formatting. It also handles invalid or missing dates gracefully by showing "Recently" instead, which keeps the UI user-friendly and avoids confusion if the stored value is corrupted or not set.
 export function formatStoredDate(value) {
   const date = value ? new Date(value) : new Date();
 

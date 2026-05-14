@@ -35,7 +35,7 @@ export function createSectionTransitioner({
       createParticles(dom.particlesRegulation, state.particles.count, state.particles.speed);
     }
   }
-
+// this function handles the transition between different sections of the app (hero, state, regulation) by first hiding the current section and then showing the target section after a short delay. It also updates the application state to reflect the new active section and stops any active soundscape if the user is navigating away from the regulation section. This ensures a smooth and cohesive user experience as they navigate through the different parts of the app while keeping audio and visual elements in sync with their current context.
   function transitionToSection(targetSection) {
     window.scrollTo(0, 0);
     hideCurrentSection();

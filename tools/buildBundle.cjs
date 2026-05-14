@@ -26,13 +26,13 @@ const files = [
   "src/main.js",
   "src/entry.js",
 ];
-
+//This function is a simple way to remove ES module syntax (import/export) from the source files so they can be concatenated into a single script for the browser. It assumes that imports are only used for side effects and that exports are only used for functions, classes, or variables that can be declared in place. This is sufficient for our current codebase but may need to be enhanced if we start using more complex module features.
 function stripModuleSyntax(source) {
   return source
     .replace(/^import\s+[\s\S]*?from\s+["'][^"']+["'];\s*\n?/gm, "")
     .replace(/^export\s+(?=(const|let|var|function|class)\s)/gm, "");
 }
-
+// this is a simple build script that concatenates the source files in the specified order, removes ES module syntax, and wraps everything in an IIFE to create a single bundle for the browser. The resulting script.js can be included in index.html with a normal script tag, allowing it to be opened directly without a local static server.
 const chunks = files.map((file) => {
   const absolutePath = path.join(root, file);
   const source = fs.readFileSync(absolutePath, "utf8");

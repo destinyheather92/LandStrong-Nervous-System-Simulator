@@ -29,7 +29,7 @@ import {
 import { createRegulationContent } from "./ui/regulationContent.js";
 import { createSectionTransitioner } from "./ui/transitions.js";
 import { createWellnessManager } from "./wellnessManager.js";
-
+// loading prefer
 let userPreferences = loadPreferences();
 let activityData = loadActivity();
 let emotionSelectionToken = 0;
@@ -48,7 +48,7 @@ function saveActivity() {
   activityData.appVisits = activityData.appVisits.slice(0, 120);
   writeStorage(storageKeys.activity, activityData);
 }
-
+// this creates an instance of the wellness manager, which is responsible for handling the core logic related to the user's emotional well-being, such as tracking emotional states, managing affirmations, and rendering the dashboard. It is initialized with the necessary dependencies, including access to the DOM, application state, activity data, functions to save activity and preferences, and the emotional states and affirmations data. This modular approach allows for better organization and separation of concerns within the app's architecture.
 const wellnessManager = createWellnessManager({
   dom,
   appState,

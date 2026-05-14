@@ -1,3 +1,5 @@
+//callback functions to simplify DOM lookups and centralize them in one place for easier maintenance and readability. This way, if the structure of the HTML changes, we only need to update the selectors in this file rather than throughout the entire codebase. It also provides a clear and consistent way to access DOM elements across different modules of the app, improving code organization and reducing the likelihood of errors when manipulating the DOM.
+
 const byId = (id) => document.getElementById(id);
 const query = (selector) => document.querySelector(selector);
 
