@@ -1,3 +1,5 @@
+
+//the get breathing phases function translates the breathing pattern from the emotional state into a structured format that the breathing engine can use to manage the timing and display of each phase. ITs essentially building a step by step breathing sequence based on the current settigns.  
 function getBreathingPhases(state) {
   const pattern = state.breathingPattern;
   const phases = [
@@ -16,6 +18,7 @@ function getBreathingPhases(state) {
   return phases;
 }
 
+// The formatBreathingPattern function creates a  string representation of the current breathing pattern, 
 function formatBreathingPattern(state) {
   const pattern = state.breathingPattern;
   const holdText =
@@ -38,16 +41,17 @@ export function createBreathingEngine({
 
   function stopBreathingExercise() {
     if (breathingIntervalId) {
+      //clearInterval method is used to stop the recurring execution of the function that was set up by setInterval. In this case, it stops the breathing countdown and orb animation updates when the user completes or exits a breathing exercise. Clean Up. 
       clearInterval(breathingIntervalId);
       breathingIntervalId = null;
     }
-
+    //resetting the breathing state and UI elements ensures that the user can start a new breathing exercise without any leftover state from the previous one. 
     appState.isBreathingActive = false;
     dom.startBreathingButton.disabled = false;
     dom.breathingOrb.classList.remove("breathing");
     animator.stop();
   }
-
+//this is going to set up the breathing exercise based on the selected emotion. It also attaches the event handler to the start button, which will trigger the actual breathing exercise when clicked. 
   function setupBreathingExercise(emotionKey) {
     const state = emotionalStates[emotionKey];
 
@@ -62,7 +66,7 @@ export function createBreathingEngine({
       startBreathingExercise(emotionKey);
     };
   }
-
+//complete breathing exercise is called when the user finishes the required number of breathing cycles. It stops the exercise, triggers any completion logic (like updating wellness scores or unlocking content), and updates the UI to indicate that the session is complete. After a short delay denoted in the setTimeout method
   function completeBreathingExercise(emotionKey, state) {
     stopBreathingExercise();
     onBreathingComplete(emotionKey);
